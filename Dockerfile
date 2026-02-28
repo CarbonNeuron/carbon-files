@@ -11,15 +11,13 @@ RUN dotnet restore src/CarbonFiles.Api/CarbonFiles.Api.csproj
 
 # Copy everything and publish
 COPY . .
-RUN dotnet publish src/CarbonFiles.Api -c Release -o /app/publish
+RUN dotnet publish src/CarbonFiles.Api -c Release -o /app/publish && \
+    mkdir -p /app/publish/data
 
 # Runtime — no .NET runtime needed for AOT, just OS deps
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled
 WORKDIR /app
 COPY --from=build /app/publish .
-
-# Create data directory
-RUN mkdir -p /app/data
 
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
