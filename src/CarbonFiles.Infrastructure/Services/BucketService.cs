@@ -255,7 +255,7 @@ public sealed class BucketService : IBucketService
         // Expired buckets are not accessible
         if (entity.ExpiresAt.HasValue && entity.ExpiresAt.Value <= DateTime.UtcNow)
         {
-            _logger.LogDebug("Bucket {BucketId} not found for summary", id);
+            _logger.LogDebug("Bucket {BucketId} is expired (summary)", id);
             return null;
         }
 
