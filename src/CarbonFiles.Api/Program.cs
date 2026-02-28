@@ -60,14 +60,12 @@ Directory.CreateDirectory(dataDir);
 Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 
 // Initialize database schema + WAL mode
-// NOTE: EnsureCreated() is used instead of Migrate() because migrations
-// are trimmed under Native AOT. The schema is created from compiled models.
-// For schema changes, recreate the database or use manual SQL scripts.
+// Both Migrate() and EnsureCreated() fail under Native AOT (design-time operations are trimmed).
+// Use raw SQL DDL instead — idempotent via CREATE TABLE IF NOT EXISTS.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CarbonFilesDbContext>();
-    db.Database.EnsureCreated();
-    db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
+    DatabaseInitializer.Initialize(db);
 }
 
 // Middleware
