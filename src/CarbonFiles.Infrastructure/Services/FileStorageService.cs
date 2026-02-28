@@ -1,4 +1,5 @@
 using CarbonFiles.Core.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace CarbonFiles.Infrastructure.Services;
@@ -6,10 +7,12 @@ namespace CarbonFiles.Infrastructure.Services;
 public sealed class FileStorageService
 {
     private readonly string _dataDir;
+    private readonly ILogger<FileStorageService> _logger;
 
-    public FileStorageService(IOptions<CarbonFilesOptions> options)
+    public FileStorageService(IOptions<CarbonFilesOptions> options, ILogger<FileStorageService> logger)
     {
         _dataDir = options.Value.DataDir;
+        _logger = logger;
     }
 
     public string GetFilePath(string bucketId, string filePath)
@@ -33,6 +36,9 @@ public sealed class FileStorageService
             size = fs.Length;
         }
         File.Move(tempPath, targetPath, overwrite: true);
+
+        _logger.LogDebug("Stored {Size} bytes to {Path}", size, targetPath);
+
         return size;
     }
 
@@ -72,6 +78,9 @@ public sealed class FileStorageService
         }
 
         await content.CopyToAsync(fs);
+
+        _logger.LogDebug("Patched file at {Path} (append={Append}, offset={Offset}, new size={NewSize})", path, append, offset, fs.Length);
+
         return fs.Length;
     }
 
@@ -79,13 +88,19 @@ public sealed class FileStorageService
     {
         var path = GetFilePath(bucketId, filePath);
         if (File.Exists(path))
+        {
             File.Delete(path);
+            _logger.LogDebug("Deleted file at {Path}", path);
+        }
     }
 
     public void DeleteBucketDir(string bucketId)
     {
         var dir = Path.Combine(_dataDir, bucketId);
         if (Directory.Exists(dir))
+        {
             Directory.Delete(dir, true);
+            _logger.LogDebug("Deleted bucket directory {Dir}", dir);
+        }
     }
 }

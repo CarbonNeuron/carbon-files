@@ -4,6 +4,7 @@ using CarbonFiles.Core.Utilities;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CarbonFiles.Infrastructure.Services;
 
@@ -12,16 +13,20 @@ public sealed class UploadService : IUploadService
     private readonly CarbonFilesDbContext _db;
     private readonly FileStorageService _storage;
     private readonly INotificationService _notifications;
+    private readonly ILogger<UploadService> _logger;
 
-    public UploadService(CarbonFilesDbContext db, FileStorageService storage, INotificationService notifications)
+    public UploadService(CarbonFilesDbContext db, FileStorageService storage, INotificationService notifications, ILogger<UploadService> logger)
     {
         _db = db;
         _storage = storage;
         _notifications = notifications;
+        _logger = logger;
     }
 
     public async Task<BucketFile> StoreFileAsync(string bucketId, string path, Stream content, AuthContext auth)
     {
+        _logger.LogDebug("Storing file {Path} in bucket {BucketId}", path, bucketId);
+
         var normalized = path.ToLowerInvariant();
         var name = Path.GetFileName(path);
         var mimeType = MimeDetector.DetectFromExtension(path);
@@ -51,6 +56,8 @@ public sealed class UploadService : IUploadService
             }
 
             await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Updated file {Path} in bucket {BucketId} ({OldSize} -> {Size} bytes)", normalized, bucketId, oldSize, size);
 
             var updatedFile = new BucketFile
             {
@@ -106,6 +113,8 @@ public sealed class UploadService : IUploadService
             }
 
             await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Created file {Path} in bucket {BucketId} ({Size} bytes, short code {ShortCode})", normalized, bucketId, size, shortCode);
 
             var createdFile = new BucketFile
             {

@@ -55,7 +55,7 @@ public class CleanupServiceTests : IDisposable
         var services = new ServiceCollection();
         services.AddDbContext<CarbonFilesDbContext>(opts =>
             opts.UseSqlite(_keepAliveConnection.ConnectionString));
-        services.AddSingleton(new FileStorageService(cfOptions));
+        services.AddSingleton(new FileStorageService(cfOptions, NullLogger<FileStorageService>.Instance));
         _serviceProvider = services.BuildServiceProvider();
 
         _sut = new CleanupService(

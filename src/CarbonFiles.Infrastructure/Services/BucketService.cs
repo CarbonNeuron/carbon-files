@@ -8,6 +8,7 @@ using CarbonFiles.Core.Utilities;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace CarbonFiles.Infrastructure.Services;
@@ -17,12 +18,14 @@ public sealed class BucketService : IBucketService
     private readonly CarbonFilesDbContext _db;
     private readonly string _dataDir;
     private readonly INotificationService _notifications;
+    private readonly ILogger<BucketService> _logger;
 
-    public BucketService(CarbonFilesDbContext db, IOptions<CarbonFilesOptions> options, INotificationService notifications)
+    public BucketService(CarbonFilesDbContext db, IOptions<CarbonFilesOptions> options, INotificationService notifications, ILogger<BucketService> logger)
     {
         _db = db;
         _dataDir = options.Value.DataDir;
         _notifications = notifications;
+        _logger = logger;
     }
 
     public async Task<Bucket> CreateAsync(CreateBucketRequest request, AuthContext auth)
@@ -47,6 +50,9 @@ public sealed class BucketService : IBucketService
         _db.Buckets.Add(entity);
         await _db.SaveChangesAsync();
 
+        _logger.LogInformation("Created bucket {BucketId} with name {Name} for owner {Owner}, expires {ExpiresAt}",
+            bucketId, request.Name, owner, expiresAt?.ToString("o") ?? "never");
+
         // Create the storage directory on disk
         var bucketDir = Path.Combine(_dataDir, bucketId);
         Directory.CreateDirectory(bucketDir);
@@ -58,6 +64,9 @@ public sealed class BucketService : IBucketService
 
     public async Task<PaginatedResponse<Bucket>> ListAsync(PaginationParams pagination, AuthContext auth, bool includeExpired = false)
     {
+        _logger.LogDebug("Listing buckets for {AuthType} (includeExpired={IncludeExpired}, limit={Limit}, offset={Offset})",
+            auth.IsAdmin ? "admin" : auth.OwnerName ?? "public", includeExpired, pagination.Limit, pagination.Offset);
+
         IQueryable<BucketEntity> query = _db.Buckets;
 
         // Filter by ownership
@@ -116,11 +125,17 @@ public sealed class BucketService : IBucketService
     {
         var entity = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
         if (entity == null)
+        {
+            _logger.LogDebug("Bucket {BucketId} not found", id);
             return null;
+        }
 
         // Expired buckets are not accessible
         if (entity.ExpiresAt.HasValue && entity.ExpiresAt.Value <= DateTime.UtcNow)
+        {
+            _logger.LogDebug("Bucket {BucketId} is expired", id);
             return null;
+        }
 
         var files = await _db.Files
             .Where(f => f.BucketId == id)
@@ -151,11 +166,17 @@ public sealed class BucketService : IBucketService
     {
         var entity = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
         if (entity == null)
+        {
+            _logger.LogDebug("Bucket {BucketId} not found for update", id);
             return null;
+        }
 
         // Check ownership
         if (!auth.CanManage(entity.Owner))
+        {
+            _logger.LogWarning("Access denied: update bucket {BucketId} by {Owner}", id, auth.OwnerName ?? "unknown");
             return null;
+        }
 
         if (request.Name != null)
             entity.Name = request.Name;
@@ -167,6 +188,8 @@ public sealed class BucketService : IBucketService
             entity.ExpiresAt = ExpiryParser.Parse(request.ExpiresIn);
 
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Updated bucket {BucketId}", id);
 
         var changes = new BucketChanges
         {
@@ -183,11 +206,17 @@ public sealed class BucketService : IBucketService
     {
         var entity = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
         if (entity == null)
+        {
+            _logger.LogDebug("Bucket {BucketId} not found for delete", id);
             return false;
+        }
 
         // Check ownership
         if (!auth.CanManage(entity.Owner))
+        {
+            _logger.LogWarning("Access denied: delete bucket {BucketId} by {Owner}", id, auth.OwnerName ?? "unknown");
             return false;
+        }
 
         // Delete all related entities
         var files = await _db.Files.Where(f => f.BucketId == id).ToListAsync();
@@ -207,6 +236,9 @@ public sealed class BucketService : IBucketService
         if (Directory.Exists(bucketDir))
             Directory.Delete(bucketDir, true);
 
+        _logger.LogInformation("Deleted bucket {BucketId} with {FileCount} files, {ShortUrlCount} short URLs, {TokenCount} upload tokens",
+            id, files.Count, shortUrls.Count, uploadTokens.Count);
+
         await _notifications.NotifyBucketDeleted(id);
         return true;
     }
@@ -215,11 +247,17 @@ public sealed class BucketService : IBucketService
     {
         var entity = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
         if (entity == null)
+        {
+            _logger.LogDebug("Bucket {BucketId} not found for summary", id);
             return null;
+        }
 
         // Expired buckets are not accessible
         if (entity.ExpiresAt.HasValue && entity.ExpiresAt.Value <= DateTime.UtcNow)
+        {
+            _logger.LogDebug("Bucket {BucketId} not found for summary", id);
             return null;
+        }
 
         var files = await _db.Files
             .Where(f => f.BucketId == id)

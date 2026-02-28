@@ -3,6 +3,7 @@ using CarbonFiles.Core.Models;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CarbonFiles.Infrastructure.Services;
 
@@ -11,16 +12,20 @@ public sealed class FileService : IFileService
     private readonly CarbonFilesDbContext _db;
     private readonly FileStorageService _storage;
     private readonly INotificationService _notifications;
+    private readonly ILogger<FileService> _logger;
 
-    public FileService(CarbonFilesDbContext db, FileStorageService storage, INotificationService notifications)
+    public FileService(CarbonFilesDbContext db, FileStorageService storage, INotificationService notifications, ILogger<FileService> logger)
     {
         _db = db;
         _storage = storage;
         _notifications = notifications;
+        _logger = logger;
     }
 
     public async Task<PaginatedResponse<BucketFile>> ListAsync(string bucketId, PaginationParams pagination)
     {
+        _logger.LogDebug("Listing files in bucket {BucketId} (limit={Limit}, offset={Offset})", bucketId, pagination.Limit, pagination.Offset);
+
         IQueryable<FileEntity> query = _db.Files.Where(f => f.BucketId == bucketId);
 
         var total = await query.CountAsync();
@@ -72,7 +77,10 @@ public sealed class FileService : IFileService
         var normalized = path.ToLowerInvariant();
         var entity = await _db.Files.FirstOrDefaultAsync(f => f.BucketId == bucketId && f.Path == normalized);
         if (entity == null)
+        {
+            _logger.LogDebug("File {Path} not found in bucket {BucketId}", path, bucketId);
             return null;
+        }
 
         return entity.ToBucketFile();
     }
@@ -87,7 +95,10 @@ public sealed class FileService : IFileService
             return false;
 
         if (!auth.CanManage(bucket.Owner))
+        {
+            _logger.LogWarning("Access denied: delete file {Path} in bucket {BucketId}", path, bucketId);
             return false;
+        }
 
         var entity = await _db.Files.FirstOrDefaultAsync(f => f.BucketId == bucketId && f.Path == normalized);
         if (entity == null)
@@ -110,6 +121,8 @@ public sealed class FileService : IFileService
 
         // Delete from disk
         _storage.DeleteFile(bucketId, normalized);
+
+        _logger.LogInformation("Deleted file {Path} from bucket {BucketId}", normalized, bucketId);
 
         await _notifications.NotifyFileDeleted(bucketId, normalized);
         return true;
@@ -144,6 +157,9 @@ public sealed class FileService : IFileService
         }
 
         await _db.SaveChangesAsync();
+
+        _logger.LogDebug("Updated file size for {Path} in bucket {BucketId}: {OldSize} -> {NewSize}", path, bucketId, oldSize, newSize);
+
         return true;
     }
 }

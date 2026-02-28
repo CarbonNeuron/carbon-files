@@ -8,6 +8,7 @@ using CarbonFiles.Infrastructure.Data.Entities;
 using CarbonFiles.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -43,7 +44,7 @@ public class BucketServiceTests : IDisposable
         Directory.CreateDirectory(_tempDir);
 
         var options = Options.Create(new CarbonFilesOptions { DataDir = _tempDir });
-        _sut = new BucketService(_db, options, new NullNotificationService());
+        _sut = new BucketService(_db, options, new NullNotificationService(), NullLogger<BucketService>.Instance);
     }
 
     public void Dispose()
