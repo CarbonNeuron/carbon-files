@@ -53,13 +53,18 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Enable WAL mode + auto-migrate in development
+// Ensure data directory exists
+var dataDir = builder.Configuration.GetValue<string>("CarbonFiles:DataDir") ?? "./data";
+var dbPath = builder.Configuration.GetValue<string>("CarbonFiles:DbPath") ?? "./data/carbonfiles.db";
+Directory.CreateDirectory(dataDir);
+Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+
+// Enable WAL mode + apply migrations
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CarbonFilesDbContext>();
+    db.Database.Migrate();
     db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
-    if (app.Environment.IsDevelopment())
-        db.Database.Migrate();
 }
 
 // Middleware
