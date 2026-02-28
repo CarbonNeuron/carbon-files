@@ -89,4 +89,16 @@ public class TestFixture : IAsyncLifetime
         });
         return client;
     }
+
+    /// <summary>
+    /// Returns the base URL of the test server for SignalR client connections.
+    /// </summary>
+    public string GetServerUrl()
+        => _factory.Server.BaseAddress.ToString().TrimEnd('/');
+
+    /// <summary>
+    /// Returns an HttpMessageHandler wired to the test server for SignalR client connections.
+    /// </summary>
+    public HttpMessageHandler GetHandler()
+        => _factory.Server.CreateHandler();
 }

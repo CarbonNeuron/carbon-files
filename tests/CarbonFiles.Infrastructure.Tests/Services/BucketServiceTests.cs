@@ -1,6 +1,8 @@
 using CarbonFiles.Core.Configuration;
+using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
+using CarbonFiles.Core.Models.Responses;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
 using CarbonFiles.Infrastructure.Services;
@@ -10,6 +12,16 @@ using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace CarbonFiles.Infrastructure.Tests.Services;
+
+internal sealed class NullNotificationService : INotificationService
+{
+    public Task NotifyFileCreated(string bucketId, BucketFile file) => Task.CompletedTask;
+    public Task NotifyFileUpdated(string bucketId, BucketFile file) => Task.CompletedTask;
+    public Task NotifyFileDeleted(string bucketId, string path) => Task.CompletedTask;
+    public Task NotifyBucketCreated(Bucket bucket) => Task.CompletedTask;
+    public Task NotifyBucketUpdated(string bucketId, BucketChanges changes) => Task.CompletedTask;
+    public Task NotifyBucketDeleted(string bucketId) => Task.CompletedTask;
+}
 
 public class BucketServiceTests : IDisposable
 {
@@ -31,7 +43,7 @@ public class BucketServiceTests : IDisposable
         Directory.CreateDirectory(_tempDir);
 
         var options = Options.Create(new CarbonFilesOptions { DataDir = _tempDir });
-        _sut = new BucketService(_db, options);
+        _sut = new BucketService(_db, options, new NullNotificationService());
     }
 
     public void Dispose()

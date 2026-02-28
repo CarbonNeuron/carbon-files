@@ -1,6 +1,8 @@
 using CarbonFiles.Api.Auth;
 using CarbonFiles.Api.Endpoints;
+using CarbonFiles.Api.Hubs;
 using CarbonFiles.Api.Serialization;
+using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Infrastructure;
 using CarbonFiles.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +30,9 @@ builder.Services.AddOpenApi();
 
 // Infrastructure (EF Core, auth)
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Real-time notifications via SignalR
+builder.Services.AddScoped<INotificationService, HubNotificationService>();
 
 // CORS
 var corsOrigins = builder.Configuration.GetValue<string>("CarbonFiles:CorsOrigins") ?? "*";
@@ -72,8 +77,8 @@ app.MapTokenEndpoints();
 app.MapShortUrlEndpoints();
 app.MapStatsEndpoints();
 
-// SignalR hub — will be added in Task 21
-// app.MapHub<FileHub>("/hub/files");
+// SignalR hub
+app.MapHub<FileHub>("/hub/files");
 
 // OpenAPI + Scalar
 app.MapOpenApi();

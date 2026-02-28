@@ -11,11 +11,13 @@ public sealed class UploadService : IUploadService
 {
     private readonly CarbonFilesDbContext _db;
     private readonly FileStorageService _storage;
+    private readonly INotificationService _notifications;
 
-    public UploadService(CarbonFilesDbContext db, FileStorageService storage)
+    public UploadService(CarbonFilesDbContext db, FileStorageService storage, INotificationService notifications)
     {
         _db = db;
         _storage = storage;
+        _notifications = notifications;
     }
 
     public async Task<BucketFile> StoreFileAsync(string bucketId, string path, Stream content, AuthContext auth)
@@ -50,7 +52,7 @@ public sealed class UploadService : IUploadService
 
             await _db.SaveChangesAsync();
 
-            return new BucketFile
+            var updatedFile = new BucketFile
             {
                 Path = existing.Path,
                 Name = existing.Name,
@@ -61,6 +63,9 @@ public sealed class UploadService : IUploadService
                 CreatedAt = existing.CreatedAt,
                 UpdatedAt = existing.UpdatedAt
             };
+
+            await _notifications.NotifyFileUpdated(bucketId, updatedFile);
+            return updatedFile;
         }
         else
         {
@@ -102,7 +107,7 @@ public sealed class UploadService : IUploadService
 
             await _db.SaveChangesAsync();
 
-            return new BucketFile
+            var createdFile = new BucketFile
             {
                 Path = entity.Path,
                 Name = entity.Name,
@@ -113,6 +118,9 @@ public sealed class UploadService : IUploadService
                 CreatedAt = entity.CreatedAt,
                 UpdatedAt = entity.UpdatedAt
             };
+
+            await _notifications.NotifyFileCreated(bucketId, createdFile);
+            return createdFile;
         }
     }
 

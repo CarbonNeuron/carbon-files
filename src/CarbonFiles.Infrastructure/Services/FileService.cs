@@ -10,11 +10,13 @@ public sealed class FileService : IFileService
 {
     private readonly CarbonFilesDbContext _db;
     private readonly FileStorageService _storage;
+    private readonly INotificationService _notifications;
 
-    public FileService(CarbonFilesDbContext db, FileStorageService storage)
+    public FileService(CarbonFilesDbContext db, FileStorageService storage, INotificationService notifications)
     {
         _db = db;
         _storage = storage;
+        _notifications = notifications;
     }
 
     public async Task<PaginatedResponse<BucketFile>> ListAsync(string bucketId, PaginationParams pagination)
@@ -109,6 +111,7 @@ public sealed class FileService : IFileService
         // Delete from disk
         _storage.DeleteFile(bucketId, normalized);
 
+        await _notifications.NotifyFileDeleted(bucketId, normalized);
         return true;
     }
 

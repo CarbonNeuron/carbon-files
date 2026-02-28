@@ -16,11 +16,13 @@ public sealed class BucketService : IBucketService
 {
     private readonly CarbonFilesDbContext _db;
     private readonly string _dataDir;
+    private readonly INotificationService _notifications;
 
-    public BucketService(CarbonFilesDbContext db, IOptions<CarbonFilesOptions> options)
+    public BucketService(CarbonFilesDbContext db, IOptions<CarbonFilesOptions> options, INotificationService notifications)
     {
         _db = db;
         _dataDir = options.Value.DataDir;
+        _notifications = notifications;
     }
 
     public async Task<Bucket> CreateAsync(CreateBucketRequest request, AuthContext auth)
@@ -49,7 +51,9 @@ public sealed class BucketService : IBucketService
         var bucketDir = Path.Combine(_dataDir, bucketId);
         Directory.CreateDirectory(bucketDir);
 
-        return entity.ToBucket();
+        var bucket = entity.ToBucket();
+        await _notifications.NotifyBucketCreated(bucket);
+        return bucket;
     }
 
     public async Task<PaginatedResponse<Bucket>> ListAsync(PaginationParams pagination, AuthContext auth, bool includeExpired = false)
@@ -163,6 +167,15 @@ public sealed class BucketService : IBucketService
             entity.ExpiresAt = ExpiryParser.Parse(request.ExpiresIn);
 
         await _db.SaveChangesAsync();
+
+        var changes = new BucketChanges
+        {
+            Name = request.Name,
+            Description = request.Description,
+            ExpiresAt = request.ExpiresIn != null ? entity.ExpiresAt : null
+        };
+        await _notifications.NotifyBucketUpdated(id, changes);
+
         return entity.ToBucket();
     }
 
@@ -194,6 +207,7 @@ public sealed class BucketService : IBucketService
         if (Directory.Exists(bucketDir))
             Directory.Delete(bucketDir, true);
 
+        await _notifications.NotifyBucketDeleted(id);
         return true;
     }
 
