@@ -80,4 +80,13 @@ public class TestFixture : IAsyncLifetime
 
     public HttpClient CreateAdminClient()
         => CreateAuthenticatedClient("test-admin-key");
+
+    public HttpClient CreateNoRedirectClient()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        return client;
+    }
 }
