@@ -177,6 +177,58 @@ Migrations auto-apply in development mode. In production, run migrations explici
 
 Interactive API docs available at `/scalar` when running locally (development mode).
 
+## Client SDKs
+
+Typed client libraries are available for four languages, all generated from the OpenAPI spec.
+
+**TypeScript:**
+```bash
+npm install @carbonfiles/client
+```
+```typescript
+import { client, createBucket, listFiles } from '@carbonfiles/client';
+
+client.setConfig({ baseUrl: 'https://files.example.com' });
+client.interceptors.request.use((req) => {
+  req.headers.set('Authorization', 'Bearer cf4_your_api_key');
+  return req;
+});
+
+const { data } = await createBucket({ body: { name: 'my-bucket' } });
+```
+
+**C# (.NET):**
+```bash
+dotnet add package CarbonFiles.Client
+```
+```csharp
+services.AddCarbonFilesClient(new Uri("https://files.example.com"));
+// Or with custom auth handler
+services.AddRefitClient<ICarbonFilesApi>(refitSettings)
+    .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://files.example.com"))
+    .AddHttpMessageHandler<AuthHandler>();
+```
+
+**Python:**
+```bash
+pip install carbonfiles-client
+```
+```python
+from carbonfiles_client import AuthenticatedClient
+from carbonfiles_client.api.buckets import list_buckets
+
+client = AuthenticatedClient(base_url="https://files.example.com", token="cf4_your_api_key")
+buckets = list_buckets.sync(client=client)
+```
+
+**PowerShell:**
+```powershell
+Install-Module CarbonFiles
+Connect-CfServer -Uri "https://files.example.com" -Token "cf4_your_api_key"
+$bucket = New-CfBucket -Name "my-bucket"
+Get-CfFile -BucketId $bucket.Id
+```
+
 ## License
 
 MIT

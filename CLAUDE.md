@@ -100,3 +100,28 @@ Hub at `/hub/files`. Group-based: `bucket:{id}`, `file:{id}:{path}`, `global`. J
 - Expiry parsing: `ExpiryParser` handles duration strings (1h, 1d, 1w, 30d), Unix timestamps, and ISO 8601
 - SQLite with WAL mode for concurrent access
 - Pagination params: `limit`, `offset`, `sort`, `order`
+
+## Client SDKs
+
+Four client SDKs under `clients/`:
+
+| Language | Package | Generator | Dir |
+|---|---|---|---|
+| TypeScript | `@carbonfiles/client` (npm) | Hey API (`@hey-api/openapi-ts`) | `clients/typescript/` |
+| C# | `CarbonFiles.Client` (NuGet) | Refitter (MSBuild) | `clients/csharp/` |
+| Python | `carbonfiles-client` (PyPI) | openapi-python-client | `clients/python/` |
+| PowerShell | `CarbonFiles` (PSGallery) | Hand-crafted | `clients/powershell/` |
+
+### Regenerating Clients Locally
+
+```bash
+./scripts/export-openapi.sh openapi.json
+# TypeScript
+cp openapi.json clients/typescript/ && cd clients/typescript && npm run generate && npm run build
+# C#
+cp openapi.json clients/csharp/ && dotnet build clients/csharp/ -c Release
+# Python
+cp openapi.json clients/python/ && clients/python/generate.sh
+```
+
+Publishing is automated via `.github/workflows/publish-clients.yml` on GitHub Release.
