@@ -59,11 +59,14 @@ var dbPath = builder.Configuration.GetValue<string>("CarbonFiles:DbPath") ?? "./
 Directory.CreateDirectory(dataDir);
 Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 
-// Enable WAL mode + apply migrations
+// Initialize database schema + WAL mode
+// NOTE: EnsureCreated() is used instead of Migrate() because migrations
+// are trimmed under Native AOT. The schema is created from compiled models.
+// For schema changes, recreate the database or use manual SQL scripts.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CarbonFilesDbContext>();
-    db.Database.Migrate();
+    db.Database.EnsureCreated();
     db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
 }
 
