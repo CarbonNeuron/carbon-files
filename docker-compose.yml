@@ -1,0 +1,20 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - carbonfiles-data:/app/data
+    environment:
+      - CarbonFiles__AdminKey=change-me-in-production
+      - CarbonFiles__DataDir=/app/data
+      - CarbonFiles__DbPath=/app/data/carbonfiles.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  carbonfiles-data:
