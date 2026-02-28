@@ -65,7 +65,8 @@ app.UseMiddleware<AuthMiddleware>();
 app.MapHealthEndpoints();
 app.MapKeyEndpoints();
 app.MapBucketEndpoints();
-// etc.
+app.MapUploadEndpoints();
+app.MapFileEndpoints();
 
 // SignalR hub — will be added in Task 21
 // app.MapHub<FileHub>("/hub/files");

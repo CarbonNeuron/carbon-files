@@ -29,6 +29,11 @@ public static class DependencyInjection
         services.AddScoped<IApiKeyService, ApiKeyService>();
         services.AddScoped<IBucketService, BucketService>();
 
+        // File services
+        services.AddSingleton<FileStorageService>();
+        services.AddScoped<IFileService, FileService>();
+        services.AddScoped<IUploadService, UploadService>();
+
         return services;
     }
 }
