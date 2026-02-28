@@ -24,6 +24,7 @@ public static class DependencyInjection
 
         // Auth
         services.AddMemoryCache();
+        services.AddSingleton<ICacheService, CacheService>();
         services.AddSingleton(new JwtHelper(options.EffectiveJwtSecret));
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IApiKeyService, ApiKeyService>();
