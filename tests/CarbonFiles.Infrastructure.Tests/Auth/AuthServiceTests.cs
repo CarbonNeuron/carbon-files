@@ -8,6 +8,7 @@ using CarbonFiles.Infrastructure.Data.Entities;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -41,7 +42,7 @@ public class AuthServiceTests : IDisposable
         _jwt = new JwtHelper(JwtSecret);
         var cache = new MemoryCache(new MemoryCacheOptions());
 
-        _sut = new AuthService(_db, options, _jwt, cache);
+        _sut = new AuthService(_db, options, _jwt, cache, NullLogger<AuthService>.Instance);
     }
 
     public void Dispose()
