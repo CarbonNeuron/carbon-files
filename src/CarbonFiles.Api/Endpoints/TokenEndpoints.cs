@@ -3,6 +3,7 @@ using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
+using CarbonFiles.Core.Models.Responses;
 
 namespace CarbonFiles.Api.Endpoints;
 
@@ -29,6 +30,9 @@ public static class TokenEndpoints
                 return Results.Json(new ErrorResponse { Error = ex.Message }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
             }
         })
+        .Produces<DashboardTokenResponse>(201)
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(403)
         .WithSummary("Create dashboard token")
         .WithDescription("Auth: Admin only. Creates a short-lived JWT token for dashboard access with optional custom expiry.");
 
@@ -47,6 +51,8 @@ public static class TokenEndpoints
             var info = svc.ValidateToken(token);
             return info != null ? Results.Ok(info) : Results.Json(new ErrorResponse { Error = "Invalid or expired token" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 401);
         })
+        .Produces<DashboardTokenInfo>(200)
+        .Produces<ErrorResponse>(401)
         .WithSummary("Validate dashboard token")
         .WithDescription("Auth: Dashboard token (Bearer). Validates the current dashboard token and returns its metadata (expiry, issued at).");
     }

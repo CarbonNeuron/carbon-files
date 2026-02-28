@@ -3,6 +3,7 @@ using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
+using CarbonFiles.Core.Models.Responses;
 
 namespace CarbonFiles.Api.Endpoints;
 
@@ -31,6 +32,10 @@ public static class UploadTokenEndpoints
                 return Results.Json(new ErrorResponse { Error = ex.Message }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
             }
         })
+        .Produces<UploadTokenResponse>(201)
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(403)
+        .Produces<ErrorResponse>(404)
         .WithTags("Upload Tokens")
         .WithSummary("Create upload token")
         .WithDescription("Auth: Bucket owner or admin. Creates a scoped upload token for a specific bucket with optional expiry and upload limit.");

@@ -3,6 +3,7 @@ using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
+using CarbonFiles.Core.Models.Responses;
 
 namespace CarbonFiles.Api.Endpoints;
 
@@ -25,6 +26,9 @@ public static class KeyEndpoints
             var result = await svc.CreateAsync(request.Name);
             return Results.Created($"/api/keys/{result.Prefix}", result);
         })
+        .Produces<ApiKeyResponse>(201)
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(403)
         .WithSummary("Create API key")
         .WithDescription("Auth: Admin only. Creates a new API key scoped to its own buckets. Returns the full key (only shown once).");
 
@@ -39,6 +43,8 @@ public static class KeyEndpoints
             var result = await svc.ListAsync(new PaginationParams { Limit = limit, Offset = offset, Sort = sort, Order = order });
             return Results.Ok(result);
         })
+        .Produces<PaginatedResponse<ApiKeyListItem>>(200)
+        .Produces<ErrorResponse>(403)
         .WithSummary("List API keys")
         .WithDescription("Auth: Admin only. Returns a paginated list of all API keys (secrets are masked).");
 
@@ -52,6 +58,9 @@ public static class KeyEndpoints
             var deleted = await svc.DeleteAsync(prefix);
             return deleted ? Results.NoContent() : Results.Json(new ErrorResponse { Error = "API key not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
+        .Produces(204)
+        .Produces<ErrorResponse>(403)
+        .Produces<ErrorResponse>(404)
         .WithSummary("Revoke API key")
         .WithDescription("Auth: Admin only. Permanently revokes an API key by its prefix.");
 
@@ -65,6 +74,9 @@ public static class KeyEndpoints
             var result = await svc.GetUsageAsync(prefix);
             return result != null ? Results.Ok(result) : Results.Json(new ErrorResponse { Error = "API key not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
+        .Produces<ApiKeyUsageResponse>(200)
+        .Produces<ErrorResponse>(403)
+        .Produces<ErrorResponse>(404)
         .WithSummary("Get API key usage")
         .WithDescription("Auth: Admin only. Returns detailed usage statistics for an API key (bucket count, file count, total size).");
     }

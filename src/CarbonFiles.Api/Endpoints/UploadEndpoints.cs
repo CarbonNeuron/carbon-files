@@ -76,6 +76,11 @@ public static class UploadEndpoints
 
             return Results.Created($"/api/buckets/{id}/files", new UploadResponse { Uploaded = uploaded });
         })
+        .Produces<UploadResponse>(201)
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(403)
+        .Produces<ErrorResponse>(404)
+        .Produces<ErrorResponse>(413)
         .DisableAntiforgery()
         .WithTags("Uploads")
         .WithSummary("Upload files (multipart)")
@@ -123,6 +128,10 @@ public static class UploadEndpoints
 
             return Results.Created($"/api/buckets/{id}/files/{result.Path}", new UploadResponse { Uploaded = [result] });
         })
+        .Produces<UploadResponse>(201)
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(403)
+        .Produces<ErrorResponse>(404)
         .WithTags("Uploads")
         .WithSummary("Upload file (streaming)")
         .WithDescription("Auth: Bucket owner, admin, or upload token (?token=). Stream-upload a single file. Requires ?filename= query parameter.");

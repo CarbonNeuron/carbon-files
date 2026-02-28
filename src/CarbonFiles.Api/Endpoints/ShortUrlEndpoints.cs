@@ -16,6 +16,8 @@ public static class ShortUrlEndpoints
             var url = await svc.ResolveAsync(code);
             return url != null ? Results.Redirect(url) : Results.NotFound();
         })
+        .Produces(302)
+        .Produces(404)
         .WithTags("Short URLs")
         .WithSummary("Resolve short URL")
         .WithDescription("Public. Redirects (302) to the file content URL for the given short code.");
@@ -30,6 +32,9 @@ public static class ShortUrlEndpoints
             var deleted = await svc.DeleteAsync(code, auth);
             return deleted ? Results.NoContent() : Results.NotFound();
         })
+        .Produces(204)
+        .Produces<ErrorResponse>(401)
+        .Produces(404)
         .WithTags("Short URLs")
         .WithSummary("Delete short URL")
         .WithDescription("Auth: Bucket owner or admin. Deletes a short URL by its code.");

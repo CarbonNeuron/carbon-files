@@ -4,6 +4,7 @@ using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
+using CarbonFiles.Core.Models.Responses;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Services;
 using Microsoft.AspNetCore.Http.Features;
@@ -37,6 +38,9 @@ public static class BucketEndpoints
                 return Results.Json(new ErrorResponse { Error = ex.Message }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
             }
         })
+        .Produces<Bucket>(201)
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(403)
         .WithSummary("Create bucket")
         .WithDescription("Auth: API key owner or admin. Creates a new file bucket with optional expiry and description.");
 
@@ -58,6 +62,8 @@ public static class BucketEndpoints
                 includeExpired);
             return Results.Ok(result);
         })
+        .Produces<PaginatedResponse<Bucket>>(200)
+        .Produces<ErrorResponse>(403)
         .WithSummary("List buckets")
         .WithDescription("Auth: API key owner or admin. Returns a paginated list of buckets. Admin sees all; API key sees own buckets only.");
 
@@ -69,6 +75,8 @@ public static class BucketEndpoints
                 ? Results.Ok(result)
                 : Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
+        .Produces<BucketDetailResponse>(200)
+        .Produces<ErrorResponse>(404)
         .WithSummary("Get bucket")
         .WithDescription("Public. Returns bucket details including file list.");
 
@@ -101,6 +109,10 @@ public static class BucketEndpoints
                 return Results.Json(new ErrorResponse { Error = ex.Message }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
             }
         })
+        .Produces<Bucket>(200)
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(403)
+        .Produces<ErrorResponse>(404)
         .WithSummary("Update bucket")
         .WithDescription("Auth: Bucket owner or admin. Updates bucket name, description, or expiry.");
 
@@ -122,6 +134,9 @@ public static class BucketEndpoints
             }
             return Results.NoContent();
         })
+        .Produces(204)
+        .Produces<ErrorResponse>(403)
+        .Produces<ErrorResponse>(404)
         .WithSummary("Delete bucket")
         .WithDescription("Auth: Bucket owner or admin. Permanently deletes a bucket and all its files.");
 
@@ -133,6 +148,8 @@ public static class BucketEndpoints
                 ? Results.Text(result, "text/plain")
                 : Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
+        .Produces<string>(200, "text/plain")
+        .Produces<ErrorResponse>(404)
         .WithSummary("Get bucket summary")
         .WithDescription("Public. Returns a plaintext summary of the bucket suitable for LLM context or previews.");
 
@@ -174,6 +191,8 @@ public static class BucketEndpoints
 
             return Results.Empty;
         })
+        .Produces(200, contentType: "application/zip")
+        .Produces<ErrorResponse>(404)
         .WithSummary("Download bucket as ZIP")
         .WithDescription("Public. Streams all files in the bucket as a ZIP archive. Supports HEAD requests for headers only.");
     }

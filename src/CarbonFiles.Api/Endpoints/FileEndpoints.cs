@@ -2,6 +2,7 @@ using CarbonFiles.Api.Auth;
 using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
+using CarbonFiles.Core.Models.Responses;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,8 @@ public static class FileEndpoints
                 new PaginationParams { Limit = limit, Offset = offset, Sort = sort, Order = order });
             return Results.Ok(result);
         })
+        .Produces<PaginatedResponse<BucketFile>>(200)
+        .Produces<ErrorResponse>(404)
         .WithTags("Files")
         .WithSummary("List files in bucket")
         .WithDescription("Public. Returns a paginated list of files in the specified bucket.");
@@ -51,6 +54,11 @@ public static class FileEndpoints
                 ? Results.Ok(meta)
                 : Results.Json(new ErrorResponse { Error = "File not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
+        .Produces<BucketFile>(200)
+        .Produces(206)
+        .Produces(304)
+        .Produces<ErrorResponse>(404)
+        .Produces<ErrorResponse>(416)
         .WithTags("Files")
         .WithSummary("Get file metadata or download content")
         .WithDescription("Public. Returns file metadata at /files/{path}, or streams file content at /files/{path}/content. Supports Range requests, ETag, and conditional headers.");
@@ -71,6 +79,9 @@ public static class FileEndpoints
             var deleted = await fileService.DeleteAsync(id, filePath, auth);
             return deleted ? Results.NoContent() : Results.Json(new ErrorResponse { Error = "File not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
+        .Produces(204)
+        .Produces<ErrorResponse>(403)
+        .Produces<ErrorResponse>(404)
         .WithTags("Files")
         .WithSummary("Delete file")
         .WithDescription("Auth: Bucket owner or admin. Permanently deletes a file from the bucket.");
@@ -148,6 +159,11 @@ public static class FileEndpoints
 
             return Results.Ok(await fileService.GetMetadataAsync(id, actualPath));
         })
+        .Produces<BucketFile>(200)
+        .Produces<ErrorResponse>(400)
+        .Produces<ErrorResponse>(403)
+        .Produces<ErrorResponse>(404)
+        .Produces<ErrorResponse>(416)
         .WithTags("Files")
         .WithSummary("Patch file content")
         .WithDescription("Auth: Bucket owner, admin, or upload token (?token=). Writes to a byte range of an existing file using Content-Range, or appends with X-Append: true.");
