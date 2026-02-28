@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;netstandard2.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- NuGet package metadata -->
+    <PackageId>CarbonFiles.Client</PackageId>
+    <Version>0.0.0</Version>
+    <Authors>CarbonFiles</Authors>
+    <Description>Generated C# client for the CarbonFiles API</Description>
+    <PackageTags>carbonfiles;api;client;refit</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/CarbonNeuron/carbon-files</RepositoryUrl>
+
+    <!-- Refitter: disable telemetry, skip OpenAPI 3.1 validation -->
+    <RefitterNoLogging>true</RefitterNoLogging>
+    <RefitterSkipValidation>true</RefitterSkipValidation>
+  </PropertyGroup>
+
+  <!-- Exclude the Refitter-generated file from the default glob; the MSBuild task adds it -->
+  <ItemGroup>
+    <Compile Remove="CarbonFilesClient.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Refitter.MSBuild" Version="1.6.*">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Refit" Version="8.*" />
+    <PackageReference Include="Refit.HttpClientFactory" Version="8.*" />
+  </ItemGroup>
+
+</Project>
