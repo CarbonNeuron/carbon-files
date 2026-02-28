@@ -1,4 +1,5 @@
 using CarbonFiles.Api.Auth;
+using CarbonFiles.Api.Endpoints;
 using CarbonFiles.Api.Serialization;
 using CarbonFiles.Infrastructure;
 using CarbonFiles.Infrastructure.Data;
@@ -11,6 +12,8 @@ var builder = WebApplication.CreateSlimBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, CarbonFilesJsonContext.Default);
+    options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower;
+    options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
 });
 
 // SignalR (JSON protocol only for AOT)
@@ -58,8 +61,8 @@ using (var scope = app.Services.CreateScope())
 app.UseCors();
 app.UseMiddleware<AuthMiddleware>();
 
-// Endpoints — will be added in subsequent tasks
-// app.MapHealthEndpoints();
+// Endpoints
+app.MapHealthEndpoints();
 // app.MapKeyEndpoints();
 // etc.
 
