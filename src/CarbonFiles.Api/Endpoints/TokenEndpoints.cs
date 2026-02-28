@@ -14,8 +14,9 @@ public static class TokenEndpoints
         var group = app.MapGroup("/api/tokens/dashboard").WithTags("Dashboard Tokens");
 
         // POST /api/tokens/dashboard — Create dashboard token (Admin only)
-        group.MapPost("/", async (CreateDashboardTokenRequest? request, HttpContext ctx, IDashboardTokenService svc) =>
+        group.MapPost("/", async (CreateDashboardTokenRequest? request, HttpContext ctx, IDashboardTokenService svc, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.TokenEndpoints");
             var auth = ctx.GetAuthContext();
             if (!auth.IsAdmin)
                 return Results.Json(new ErrorResponse { Error = "Admin access required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
@@ -23,6 +24,7 @@ public static class TokenEndpoints
             try
             {
                 var result = await svc.CreateAsync(request?.ExpiresIn);
+                logger.LogInformation("Dashboard token created, expires {ExpiresAt}", result.ExpiresAt.ToString("o"));
                 return Results.Created("/api/tokens/dashboard/me", result);
             }
             catch (ArgumentException ex)

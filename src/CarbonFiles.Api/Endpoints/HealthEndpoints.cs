@@ -10,13 +10,15 @@ public static class HealthEndpoints
 
     public static void MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/healthz", async (CarbonFilesDbContext db) =>
+        app.MapGet("/healthz", async (CarbonFilesDbContext db, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.HealthEndpoints");
             try
             {
                 var canConnect = await db.Database.CanConnectAsync();
                 if (!canConnect)
                 {
+                    logger.LogWarning("Health check failed: database {Status}", "unreachable");
                     return Results.Json(
                         new HealthResponse { Status = "unhealthy", UptimeSeconds = 0, Db = "unreachable" },
                         CarbonFilesJsonContext.Default.HealthResponse,
@@ -32,6 +34,7 @@ public static class HealthEndpoints
             }
             catch
             {
+                logger.LogWarning("Health check failed: database {Status}", "error");
                 return Results.Json(
                     new HealthResponse { Status = "unhealthy", UptimeSeconds = 0, Db = "error" },
                     CarbonFilesJsonContext.Default.HealthResponse,

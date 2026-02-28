@@ -14,8 +14,9 @@ public static class KeyEndpoints
         var group = app.MapGroup("/api/keys").WithTags("API Keys");
 
         // POST /api/keys — Create API key (Admin only)
-        group.MapPost("/", async (CreateApiKeyRequest request, HttpContext ctx, IApiKeyService svc) =>
+        group.MapPost("/", async (CreateApiKeyRequest request, HttpContext ctx, IApiKeyService svc, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.KeyEndpoints");
             var auth = ctx.GetAuthContext();
             if (!auth.IsAdmin)
                 return Results.Json(new ErrorResponse { Error = "Admin access required", Hint = "Use the admin key or a dashboard token." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
@@ -24,6 +25,7 @@ public static class KeyEndpoints
                 return Results.Json(new ErrorResponse { Error = "Name is required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
 
             var result = await svc.CreateAsync(request.Name);
+            logger.LogInformation("API key created: {Prefix} ({Name})", result.Prefix, request.Name);
             return Results.Created($"/api/keys/{result.Prefix}", result);
         })
         .Produces<ApiKeyResponse>(201)
@@ -49,14 +51,20 @@ public static class KeyEndpoints
         .WithDescription("Auth: Admin only. Returns a paginated list of all API keys (secrets are masked).");
 
         // DELETE /api/keys/{prefix} — Revoke API key (Admin only)
-        group.MapDelete("/{prefix}", async (string prefix, HttpContext ctx, IApiKeyService svc) =>
+        group.MapDelete("/{prefix}", async (string prefix, HttpContext ctx, IApiKeyService svc, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.KeyEndpoints");
             var auth = ctx.GetAuthContext();
             if (!auth.IsAdmin)
                 return Results.Json(new ErrorResponse { Error = "Admin access required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             var deleted = await svc.DeleteAsync(prefix);
-            return deleted ? Results.NoContent() : Results.Json(new ErrorResponse { Error = "API key not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
+            if (deleted)
+            {
+                logger.LogInformation("API key deleted: {Prefix}", prefix);
+                return Results.NoContent();
+            }
+            return Results.Json(new ErrorResponse { Error = "API key not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
         .Produces(204)
         .Produces<ErrorResponse>(403)

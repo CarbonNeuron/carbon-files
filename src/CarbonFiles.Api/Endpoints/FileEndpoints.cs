@@ -65,8 +65,9 @@ public static class FileEndpoints
 
         // DELETE /api/buckets/{id}/files/{*filePath} — Delete file (owner or admin)
         app.MapDelete("/api/buckets/{id}/files/{*filePath}", async (string id, string filePath, HttpContext ctx,
-            IFileService fileService, IBucketService bucketService) =>
+            IFileService fileService, IBucketService bucketService, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.FileEndpoints");
             // Check bucket exists
             var bucket = await bucketService.GetByIdAsync(id);
             if (bucket == null)
@@ -77,7 +78,12 @@ public static class FileEndpoints
                 return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             var deleted = await fileService.DeleteAsync(id, filePath, auth);
-            return deleted ? Results.NoContent() : Results.Json(new ErrorResponse { Error = "File not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
+            if (deleted)
+            {
+                logger.LogInformation("File {FilePath} deleted from bucket {BucketId}", filePath, id);
+                return Results.NoContent();
+            }
+            return Results.Json(new ErrorResponse { Error = "File not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
         .Produces(204)
         .Produces<ErrorResponse>(403)
@@ -88,8 +94,9 @@ public static class FileEndpoints
 
         // PATCH /api/buckets/{id}/files/{*filePath}/content — Partial file update
         app.MapMethods("/api/buckets/{id}/files/{*filePath}", new[] { "PATCH" }, async (string id, string filePath, HttpContext ctx,
-            IFileService fileService, FileStorageService storageService, IBucketService bucketService, CarbonFilesDbContext db) =>
+            IFileService fileService, FileStorageService storageService, IBucketService bucketService, CarbonFilesDbContext db, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.FileEndpoints");
             // Only handle paths ending with /content
             if (!filePath.EndsWith("/content", StringComparison.OrdinalIgnoreCase))
                 return Results.NotFound();
@@ -157,6 +164,7 @@ public static class FileEndpoints
             // Update file metadata in DB
             await fileService.UpdateFileSizeAsync(id, actualPath, newSize);
 
+            logger.LogInformation("File {FilePath} patched in bucket {BucketId}", actualPath, id);
             return Results.Ok(await fileService.GetMetadataAsync(id, actualPath));
         })
         .Produces<BucketFile>(200)

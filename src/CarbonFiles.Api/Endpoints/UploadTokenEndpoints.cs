@@ -12,8 +12,9 @@ public static class UploadTokenEndpoints
     public static void MapUploadTokenEndpoints(this IEndpointRouteBuilder app)
     {
         // POST /api/buckets/{id}/tokens — Create upload token (owner or admin)
-        app.MapPost("/api/buckets/{id}/tokens", async (string id, CreateUploadTokenRequest? request, HttpContext ctx, IUploadTokenService svc) =>
+        app.MapPost("/api/buckets/{id}/tokens", async (string id, CreateUploadTokenRequest? request, HttpContext ctx, IUploadTokenService svc, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.UploadTokenEndpoints");
             var auth = ctx.GetAuthContext();
             if (auth.IsPublic)
                 return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
@@ -25,6 +26,7 @@ public static class UploadTokenEndpoints
                 {
                     return Results.Json(new ErrorResponse { Error = "Bucket not found or access denied" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
                 }
+                logger.LogInformation("Upload token created for bucket {BucketId}", id);
                 return Results.Created($"/api/buckets/{id}/tokens", result);
             }
             catch (ArgumentException ex)

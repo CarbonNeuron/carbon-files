@@ -18,8 +18,9 @@ public static class UploadEndpoints
         // POST /api/buckets/{id}/upload — Multipart upload
         app.MapPost("/api/buckets/{id}/upload", async (string id, HttpContext ctx,
             IUploadService uploadService, IBucketService bucketService,
-            IUploadTokenService uploadTokenService, IOptions<CarbonFilesOptions> options) =>
+            IUploadTokenService uploadTokenService, IOptions<CarbonFilesOptions> options, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.UploadEndpoints");
             // Check bucket exists
             var bucket = await bucketService.GetByIdAsync(id);
             if (bucket == null)
@@ -74,6 +75,7 @@ public static class UploadEndpoints
                 await uploadTokenService.IncrementUsageAsync(validatedToken, uploaded.Count);
             }
 
+            logger.LogInformation("Uploaded {FileCount} file(s) to bucket {BucketId}", uploaded.Count, id);
             return Results.Created($"/api/buckets/{id}/files", new UploadResponse { Uploaded = uploaded });
         })
         .Produces<UploadResponse>(201)
@@ -89,8 +91,9 @@ public static class UploadEndpoints
         // PUT /api/buckets/{id}/upload/stream — Stream upload (single file)
         app.MapPut("/api/buckets/{id}/upload/stream", async (string id, HttpContext ctx,
             IUploadService uploadService, IBucketService bucketService,
-            IUploadTokenService uploadTokenService) =>
+            IUploadTokenService uploadTokenService, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.UploadEndpoints");
             // Check bucket exists
             var bucket = await bucketService.GetByIdAsync(id);
             if (bucket == null)
@@ -119,6 +122,7 @@ public static class UploadEndpoints
                 return Results.Json(new ErrorResponse { Error = "filename query parameter is required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
 
             var result = await uploadService.StoreFileAsync(id, filename, ctx.Request.Body, auth);
+            logger.LogInformation("Stream uploaded {FileName} to bucket {BucketId}", filename, id);
 
             // Update upload token usage if applicable
             if (validatedToken != null)

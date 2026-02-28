@@ -19,8 +19,9 @@ public static class BucketEndpoints
         var group = app.MapGroup("/api/buckets").WithTags("Buckets");
 
         // POST /api/buckets — Create bucket (API key or admin, NOT public)
-        group.MapPost("/", async (CreateBucketRequest request, HttpContext ctx, IBucketService svc) =>
+        group.MapPost("/", async (CreateBucketRequest request, HttpContext ctx, IBucketService svc, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.BucketEndpoints");
             var auth = ctx.GetAuthContext();
             if (auth.IsPublic)
                 return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
@@ -31,10 +32,12 @@ public static class BucketEndpoints
             try
             {
                 var result = await svc.CreateAsync(request, auth);
+                logger.LogInformation("Bucket created: {BucketId} by {Owner}", result.Id, auth.IsAdmin ? "admin" : auth.OwnerName);
                 return Results.Created($"/api/buckets/{result.Id}", result);
             }
             catch (ArgumentException ex)
             {
+                logger.LogWarning("Bucket creation failed: {Error}", ex.Message);
                 return Results.Json(new ErrorResponse { Error = ex.Message }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
             }
         })
@@ -81,8 +84,9 @@ public static class BucketEndpoints
         .WithDescription("Public. Returns bucket details including file list.");
 
         // PATCH /api/buckets/{id} — Update bucket (owner or admin)
-        group.MapPatch("/{id}", async (string id, UpdateBucketRequest request, HttpContext ctx, IBucketService svc) =>
+        group.MapPatch("/{id}", async (string id, UpdateBucketRequest request, HttpContext ctx, IBucketService svc, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.BucketEndpoints");
             var auth = ctx.GetAuthContext();
             if (auth.IsPublic)
                 return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
@@ -102,6 +106,7 @@ public static class BucketEndpoints
                         return Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
                     return Results.Json(new ErrorResponse { Error = "Access denied" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
                 }
+                logger.LogInformation("Bucket {BucketId} updated", id);
                 return Results.Ok(result);
             }
             catch (ArgumentException ex)
@@ -117,8 +122,9 @@ public static class BucketEndpoints
         .WithDescription("Auth: Bucket owner or admin. Updates bucket name, description, or expiry.");
 
         // DELETE /api/buckets/{id} — Delete bucket (owner or admin)
-        group.MapDelete("/{id}", async (string id, HttpContext ctx, IBucketService svc) =>
+        group.MapDelete("/{id}", async (string id, HttpContext ctx, IBucketService svc, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.BucketEndpoints");
             var auth = ctx.GetAuthContext();
             if (auth.IsPublic)
                 return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
@@ -132,6 +138,7 @@ public static class BucketEndpoints
                     return Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
                 return Results.Json(new ErrorResponse { Error = "Access denied" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
             }
+            logger.LogInformation("Bucket {BucketId} deleted", id);
             return Results.NoContent();
         })
         .Produces(204)
@@ -154,8 +161,9 @@ public static class BucketEndpoints
         .WithDescription("Public. Returns a plaintext summary of the bucket suitable for LLM context or previews.");
 
         // GET|HEAD /api/buckets/{id}/zip — Download bucket as ZIP (public access)
-        group.MapMethods("/{id}/zip", new[] { "GET", "HEAD" }, async (string id, HttpContext ctx, CarbonFilesDbContext db, FileStorageService storage, ILogger<Program> logger) =>
+        group.MapMethods("/{id}/zip", new[] { "GET", "HEAD" }, async (string id, HttpContext ctx, CarbonFilesDbContext db, FileStorageService storage, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.BucketEndpoints");
             var bucket = await db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
             if (bucket == null || (bucket.ExpiresAt != null && bucket.ExpiresAt < DateTime.UtcNow))
                 return Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);

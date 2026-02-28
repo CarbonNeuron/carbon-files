@@ -11,8 +11,9 @@ public static class StatsEndpoints
 {
     public static void MapStatsEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/stats", async (HttpContext ctx, CarbonFilesDbContext db) =>
+        app.MapGet("/api/stats", async (HttpContext ctx, CarbonFilesDbContext db, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.StatsEndpoints");
             var auth = ctx.GetAuthContext();
             if (!auth.IsAdmin)
                 return Results.Json(new ErrorResponse { Error = "Admin access required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
@@ -38,6 +39,7 @@ public static class StatsEndpoints
                     }).ToListAsync()
             };
 
+            logger.LogDebug("Stats queried: {BucketCount} buckets, {FileCount} files", stats.TotalBuckets, stats.TotalFiles);
             return Results.Ok(stats);
         })
         .Produces<StatsResponse>(200)
