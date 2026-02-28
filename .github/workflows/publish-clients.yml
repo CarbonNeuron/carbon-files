@@ -1,0 +1,180 @@
+name: Publish Client SDKs
+
+on:
+  release:
+    types: [published]
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+jobs:
+  export-spec:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build API
+        run: dotnet build src/CarbonFiles.Api --configuration Release
+
+      - name: Export OpenAPI spec
+        run: |
+          export CarbonFiles__DbPath="/tmp/cf-spec-$$.db"
+          export CarbonFiles__DataDir="/tmp/cf-spec-$$"
+          export CarbonFiles__AdminKey="spec-export"
+          mkdir -p "$CarbonFiles__DataDir"
+
+          dotnet run --project src/CarbonFiles.Api --configuration Release --no-build &
+          API_PID=$!
+          trap "kill $API_PID 2>/dev/null; rm -rf $CarbonFiles__DbPath $CarbonFiles__DataDir" EXIT
+
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5000/healthz > /dev/null 2>&1 && break
+            sleep 1
+          done
+
+          curl -sf http://localhost:5000/openapi/v1.json -o openapi.json
+
+      - name: Upload spec artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-spec
+          path: openapi.json
+
+  publish-typescript:
+    needs: export-spec
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/typescript
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openapi-spec
+          path: clients/typescript
+
+      - name: Set version
+        run: npm version "${{ needs.export-spec.outputs.version }}" --no-git-tag-version
+
+      - run: npm ci
+
+      - name: Generate client
+        run: npm run generate
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-csharp:
+    needs: export-spec
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_ROLL_FORWARD: LatestMajor
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openapi-spec
+          path: clients/csharp
+
+      - name: Build and pack
+        run: >-
+          dotnet pack clients/csharp/CarbonFiles.Client.csproj
+          --configuration Release
+          -p:PackageVersion=${{ needs.export-spec.outputs.version }}
+
+      - name: Publish
+        run: >-
+          dotnet nuget push clients/csharp/bin/Release/*.nupkg
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+
+  publish-python:
+    needs: export-spec
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openapi-spec
+          path: clients/python
+
+      - name: Install tools
+        run: pip install openapi-python-client ruff
+
+      - name: Update version in config
+        run: |
+          sed -i "s/package_version_override: .*/package_version_override: \"${{ needs.export-spec.outputs.version }}\"/" config.yml
+
+      - name: Generate client
+        run: |
+          chmod +x generate.sh
+          ./generate.sh
+
+      - name: Build
+        run: pip install poetry twine && poetry build
+
+      - name: Publish
+        run: twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+
+  publish-powershell:
+    needs: export-spec
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: clients/powershell
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update module version
+        run: |
+          $manifest = Get-Content CarbonFiles.psd1 -Raw
+          $manifest = $manifest -replace "ModuleVersion\s*=\s*'[^']*'", "ModuleVersion = '${{ needs.export-spec.outputs.version }}'"
+          Set-Content CarbonFiles.psd1 $manifest
+
+      - name: Validate manifest
+        run: Test-ModuleManifest CarbonFiles.psd1
+
+      - name: Publish
+        run: Publish-Module -Path . -NuGetApiKey $env:PSGALLERY_API_KEY -Verbose
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
