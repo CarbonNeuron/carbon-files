@@ -48,14 +48,14 @@ public sealed class ApiKeyService : IApiKeyService
         var total = await _db.ApiKeys.CountAsync();
 
         // Build base query with usage stats from buckets
-        var query = from k in _db.ApiKeys
-                    select new
-                    {
-                        Key = k,
-                        BucketCount = _db.Buckets.Count(b => b.OwnerKeyPrefix == k.Prefix),
-                        FileCount = _db.Buckets.Where(b => b.OwnerKeyPrefix == k.Prefix).Sum(b => b.FileCount),
-                        TotalSize = _db.Buckets.Where(b => b.OwnerKeyPrefix == k.Prefix).Sum(b => b.TotalSize)
-                    };
+        var query = _db.ApiKeys
+            .Select(k => new
+            {
+                Key = k,
+                BucketCount = _db.Buckets.Count(b => b.OwnerKeyPrefix == k.Prefix),
+                FileCount = _db.Buckets.Where(b => b.OwnerKeyPrefix == k.Prefix).Sum(b => b.FileCount),
+                TotalSize = _db.Buckets.Where(b => b.OwnerKeyPrefix == k.Prefix).Sum(b => b.TotalSize)
+            });
 
         // Apply sorting
         query = (pagination.Sort?.ToLowerInvariant(), pagination.Order?.ToLowerInvariant()) switch
