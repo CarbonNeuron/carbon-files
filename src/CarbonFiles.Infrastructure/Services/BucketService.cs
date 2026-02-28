@@ -18,13 +18,15 @@ public sealed class BucketService : IBucketService
     private readonly CarbonFilesDbContext _db;
     private readonly string _dataDir;
     private readonly INotificationService _notifications;
+    private readonly ICacheService _cache;
     private readonly ILogger<BucketService> _logger;
 
-    public BucketService(CarbonFilesDbContext db, IOptions<CarbonFilesOptions> options, INotificationService notifications, ILogger<BucketService> logger)
+    public BucketService(CarbonFilesDbContext db, IOptions<CarbonFilesOptions> options, INotificationService notifications, ICacheService cache, ILogger<BucketService> logger)
     {
         _db = db;
         _dataDir = options.Value.DataDir;
         _notifications = notifications;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -59,6 +61,7 @@ public sealed class BucketService : IBucketService
 
         var bucket = entity.ToBucket();
         await _notifications.NotifyBucketCreated(bucket);
+        _cache.InvalidateStats();
         return bucket;
     }
 
@@ -123,6 +126,10 @@ public sealed class BucketService : IBucketService
 
     public async Task<BucketDetailResponse?> GetByIdAsync(string id)
     {
+        var cached = _cache.GetBucket(id);
+        if (cached != null)
+            return cached;
+
         var entity = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
         if (entity == null)
         {
@@ -146,7 +153,7 @@ public sealed class BucketService : IBucketService
         var hasMore = files.Count > 100;
         var fileList = files.Take(100).Select(f => f.ToBucketFile()).ToList();
 
-        return new BucketDetailResponse
+        var response = new BucketDetailResponse
         {
             Id = entity.Id,
             Name = entity.Name,
@@ -160,6 +167,8 @@ public sealed class BucketService : IBucketService
             Files = fileList,
             HasMoreFiles = hasMore
         };
+        _cache.SetBucket(id, response);
+        return response;
     }
 
     public async Task<Bucket?> UpdateAsync(string id, UpdateBucketRequest request, AuthContext auth)
@@ -188,6 +197,8 @@ public sealed class BucketService : IBucketService
             entity.ExpiresAt = ExpiryParser.Parse(request.ExpiresIn);
 
         await _db.SaveChangesAsync();
+        _cache.InvalidateBucket(id);
+        _cache.InvalidateStats();
 
         _logger.LogInformation("Updated bucket {BucketId}", id);
 
@@ -240,6 +251,11 @@ public sealed class BucketService : IBucketService
             id, files.Count, shortUrls.Count, uploadTokens.Count);
 
         await _notifications.NotifyBucketDeleted(id);
+        _cache.InvalidateBucket(id);
+        _cache.InvalidateFilesForBucket(id);
+        _cache.InvalidateShortUrlsForBucket(id);
+        _cache.InvalidateUploadTokensForBucket(id);
+        _cache.InvalidateStats();
         return true;
     }
 

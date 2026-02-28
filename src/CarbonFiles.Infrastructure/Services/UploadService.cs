@@ -13,13 +13,15 @@ public sealed class UploadService : IUploadService
     private readonly CarbonFilesDbContext _db;
     private readonly FileStorageService _storage;
     private readonly INotificationService _notifications;
+    private readonly ICacheService _cache;
     private readonly ILogger<UploadService> _logger;
 
-    public UploadService(CarbonFilesDbContext db, FileStorageService storage, INotificationService notifications, ILogger<UploadService> logger)
+    public UploadService(CarbonFilesDbContext db, FileStorageService storage, INotificationService notifications, ICacheService cache, ILogger<UploadService> logger)
     {
         _db = db;
         _storage = storage;
         _notifications = notifications;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -56,6 +58,9 @@ public sealed class UploadService : IUploadService
             }
 
             await _db.SaveChangesAsync();
+            _cache.InvalidateFile(bucketId, normalized);
+            _cache.InvalidateBucket(bucketId);
+            _cache.InvalidateStats();
 
             _logger.LogInformation("Updated file {Path} in bucket {BucketId} ({OldSize} -> {Size} bytes)", normalized, bucketId, oldSize, size);
 
@@ -113,6 +118,9 @@ public sealed class UploadService : IUploadService
             }
 
             await _db.SaveChangesAsync();
+            _cache.InvalidateFile(bucketId, normalized);
+            _cache.InvalidateBucket(bucketId);
+            _cache.InvalidateStats();
 
             _logger.LogInformation("Created file {Path} in bucket {BucketId} ({Size} bytes, short code {ShortCode})", normalized, bucketId, size, shortCode);
 

@@ -24,6 +24,28 @@ internal sealed class NullNotificationService : INotificationService
     public Task NotifyBucketDeleted(string bucketId) => Task.CompletedTask;
 }
 
+internal sealed class NullCacheService : ICacheService
+{
+    public BucketDetailResponse? GetBucket(string id) => null;
+    public void SetBucket(string id, BucketDetailResponse bucket) { }
+    public void InvalidateBucket(string id) { }
+    public BucketFile? GetFileMetadata(string bucketId, string path) => null;
+    public void SetFileMetadata(string bucketId, string path, BucketFile file) { }
+    public void InvalidateFile(string bucketId, string path) { }
+    public void InvalidateFilesForBucket(string bucketId) { }
+    public (string BucketId, string FilePath)? GetShortUrl(string code) => null;
+    public void SetShortUrl(string code, string bucketId, string filePath) { }
+    public void InvalidateShortUrl(string code) { }
+    public void InvalidateShortUrlsForBucket(string bucketId) { }
+    public (string BucketId, bool IsValid)? GetUploadToken(string token) => null;
+    public void SetUploadToken(string token, string bucketId, bool isValid) { }
+    public void InvalidateUploadToken(string token) { }
+    public void InvalidateUploadTokensForBucket(string bucketId) { }
+    public StatsResponse? GetStats() => null;
+    public void SetStats(StatsResponse stats) { }
+    public void InvalidateStats() { }
+}
+
 public class BucketServiceTests : IDisposable
 {
     private readonly CarbonFilesDbContext _db;
@@ -44,7 +66,7 @@ public class BucketServiceTests : IDisposable
         Directory.CreateDirectory(_tempDir);
 
         var options = Options.Create(new CarbonFilesOptions { DataDir = _tempDir });
-        _sut = new BucketService(_db, options, new NullNotificationService(), NullLogger<BucketService>.Instance);
+        _sut = new BucketService(_db, options, new NullNotificationService(), new NullCacheService(), NullLogger<BucketService>.Instance);
     }
 
     public void Dispose()

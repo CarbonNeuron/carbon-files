@@ -12,13 +12,15 @@ public sealed class FileService : IFileService
     private readonly CarbonFilesDbContext _db;
     private readonly FileStorageService _storage;
     private readonly INotificationService _notifications;
+    private readonly ICacheService _cache;
     private readonly ILogger<FileService> _logger;
 
-    public FileService(CarbonFilesDbContext db, FileStorageService storage, INotificationService notifications, ILogger<FileService> logger)
+    public FileService(CarbonFilesDbContext db, FileStorageService storage, INotificationService notifications, ICacheService cache, ILogger<FileService> logger)
     {
         _db = db;
         _storage = storage;
         _notifications = notifications;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -74,6 +76,10 @@ public sealed class FileService : IFileService
 
     public async Task<BucketFile?> GetMetadataAsync(string bucketId, string path)
     {
+        var cached = _cache.GetFileMetadata(bucketId, path);
+        if (cached != null)
+            return cached;
+
         var normalized = path.ToLowerInvariant();
         var entity = await _db.Files.FirstOrDefaultAsync(f => f.BucketId == bucketId && f.Path == normalized);
         if (entity == null)
@@ -82,7 +88,9 @@ public sealed class FileService : IFileService
             return null;
         }
 
-        return entity.ToBucketFile();
+        var file = entity.ToBucketFile();
+        _cache.SetFileMetadata(bucketId, path, file);
+        return file;
     }
 
     public async Task<bool> DeleteAsync(string bucketId, string path, AuthContext auth)
@@ -125,6 +133,9 @@ public sealed class FileService : IFileService
         _logger.LogInformation("Deleted file {Path} from bucket {BucketId}", normalized, bucketId);
 
         await _notifications.NotifyFileDeleted(bucketId, normalized);
+        _cache.InvalidateFile(bucketId, normalized);
+        _cache.InvalidateBucket(bucketId);
+        _cache.InvalidateStats();
         return true;
     }
 
@@ -157,6 +168,9 @@ public sealed class FileService : IFileService
         }
 
         await _db.SaveChangesAsync();
+        _cache.InvalidateFile(bucketId, path);
+        _cache.InvalidateBucket(bucketId);
+        _cache.InvalidateStats();
 
         _logger.LogDebug("Updated file size for {Path} in bucket {BucketId}: {OldSize} -> {NewSize}", path, bucketId, oldSize, newSize);
 
