@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IFileService, FileService>();
         services.AddScoped<IUploadService, UploadService>();
         services.AddScoped<IShortUrlService, ShortUrlService>();
+        services.AddScoped<IUploadTokenService, UploadTokenService>();
 
         return services;
     }

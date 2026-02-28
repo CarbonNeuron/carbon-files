@@ -3,8 +3,6 @@ using CarbonFiles.Core.Configuration;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Responses;
-using CarbonFiles.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace CarbonFiles.Api.Endpoints;
@@ -19,7 +17,7 @@ public static class UploadEndpoints
         // POST /api/buckets/{id}/upload — Multipart upload
         app.MapPost("/api/buckets/{id}/upload", async (string id, HttpContext ctx,
             IUploadService uploadService, IBucketService bucketService,
-            IOptions<CarbonFilesOptions> options, CarbonFilesDbContext db) =>
+            IUploadTokenService uploadTokenService, IOptions<CarbonFilesOptions> options) =>
         {
             // Check bucket exists
             var bucket = await bucketService.GetByIdAsync(id);
@@ -28,20 +26,19 @@ public static class UploadEndpoints
 
             // Auth check: owner, admin, or upload token
             var auth = ctx.GetAuthContext();
+            string? validatedToken = null;
             if (auth.IsPublic)
             {
                 var token = ctx.Request.Query["token"].FirstOrDefault();
                 if (string.IsNullOrEmpty(token))
                     return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key, admin key, or upload token." }, statusCode: 403);
 
-                // Validate upload token
-                var uploadToken = await db.UploadTokens.FirstOrDefaultAsync(t => t.Token == token && t.BucketId == id);
-                if (uploadToken == null || uploadToken.ExpiresAt <= DateTime.UtcNow)
+                // Validate upload token via service
+                var (tokenBucketId, isValid) = await uploadTokenService.ValidateAsync(token);
+                if (!isValid || tokenBucketId != id)
                     return Results.Json(new ErrorResponse { Error = "Invalid or expired upload token" }, statusCode: 403);
 
-                if (uploadToken.MaxUploads.HasValue && uploadToken.UploadsUsed >= uploadToken.MaxUploads.Value)
-                    return Results.Json(new ErrorResponse { Error = "Upload token has reached its maximum number of uploads" }, statusCode: 403);
-
+                validatedToken = token;
                 // Use admin auth context for upload token (it's authorized)
                 auth = AuthContext.Admin();
             }
@@ -71,15 +68,9 @@ public static class UploadEndpoints
             }
 
             // Update upload token usage if applicable
-            var uploadTokenStr = ctx.Request.Query["token"].FirstOrDefault();
-            if (!string.IsNullOrEmpty(uploadTokenStr) && uploaded.Count > 0)
+            if (validatedToken != null && uploaded.Count > 0)
             {
-                var tokenEntity = await db.UploadTokens.FirstOrDefaultAsync(t => t.Token == uploadTokenStr && t.BucketId == id);
-                if (tokenEntity != null)
-                {
-                    tokenEntity.UploadsUsed += uploaded.Count;
-                    await db.SaveChangesAsync();
-                }
+                await uploadTokenService.IncrementUsageAsync(validatedToken, uploaded.Count);
             }
 
             return Results.Created($"/api/buckets/{id}/files", new UploadResponse { Uploaded = uploaded });
@@ -88,7 +79,7 @@ public static class UploadEndpoints
         // PUT /api/buckets/{id}/upload/stream — Stream upload (single file)
         app.MapPut("/api/buckets/{id}/upload/stream", async (string id, HttpContext ctx,
             IUploadService uploadService, IBucketService bucketService,
-            CarbonFilesDbContext db) =>
+            IUploadTokenService uploadTokenService) =>
         {
             // Check bucket exists
             var bucket = await bucketService.GetByIdAsync(id);
@@ -97,20 +88,19 @@ public static class UploadEndpoints
 
             // Auth check: owner, admin, or upload token
             var auth = ctx.GetAuthContext();
+            string? validatedToken = null;
             if (auth.IsPublic)
             {
                 var token = ctx.Request.Query["token"].FirstOrDefault();
                 if (string.IsNullOrEmpty(token))
                     return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key, admin key, or upload token." }, statusCode: 403);
 
-                // Validate upload token
-                var uploadToken = await db.UploadTokens.FirstOrDefaultAsync(t => t.Token == token && t.BucketId == id);
-                if (uploadToken == null || uploadToken.ExpiresAt <= DateTime.UtcNow)
+                // Validate upload token via service
+                var (tokenBucketId, isValid) = await uploadTokenService.ValidateAsync(token);
+                if (!isValid || tokenBucketId != id)
                     return Results.Json(new ErrorResponse { Error = "Invalid or expired upload token" }, statusCode: 403);
 
-                if (uploadToken.MaxUploads.HasValue && uploadToken.UploadsUsed >= uploadToken.MaxUploads.Value)
-                    return Results.Json(new ErrorResponse { Error = "Upload token has reached its maximum number of uploads" }, statusCode: 403);
-
+                validatedToken = token;
                 auth = AuthContext.Admin();
             }
 
@@ -121,15 +111,9 @@ public static class UploadEndpoints
             var result = await uploadService.StoreFileAsync(id, filename, ctx.Request.Body, auth);
 
             // Update upload token usage if applicable
-            var uploadTokenStr = ctx.Request.Query["token"].FirstOrDefault();
-            if (!string.IsNullOrEmpty(uploadTokenStr))
+            if (validatedToken != null)
             {
-                var tokenEntity = await db.UploadTokens.FirstOrDefaultAsync(t => t.Token == uploadTokenStr && t.BucketId == id);
-                if (tokenEntity != null)
-                {
-                    tokenEntity.UploadsUsed++;
-                    await db.SaveChangesAsync();
-                }
+                await uploadTokenService.IncrementUsageAsync(validatedToken, 1);
             }
 
             return Results.Created($"/api/buckets/{id}/files/{result.Path}", new UploadResponse { Uploaded = [result] });
