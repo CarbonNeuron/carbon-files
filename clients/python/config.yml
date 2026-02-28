@@ -1,0 +1,6 @@
+project_name_override: "carbonfiles-client"
+package_name_override: "carbonfiles_client"
+package_version_override: "0.0.0"
+post_hooks:
+  - "ruff check . --fix-only"
+  - "ruff format ."
