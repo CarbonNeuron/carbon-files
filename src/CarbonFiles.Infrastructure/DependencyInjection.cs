@@ -37,6 +37,9 @@ public static class DependencyInjection
         services.AddScoped<IShortUrlService, ShortUrlService>();
         services.AddScoped<IUploadTokenService, UploadTokenService>();
 
+        // Background cleanup
+        services.AddHostedService<CleanupService>();
+
         return services;
     }
 }
