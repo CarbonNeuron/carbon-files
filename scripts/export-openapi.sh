@@ -26,6 +26,10 @@ for i in $(seq 1 30); do
   if curl -sf http://localhost:5000/healthz > /dev/null 2>&1; then
     break
   fi
+  if [ "$i" -eq 30 ]; then
+    echo "ERROR: API failed to start within 30 seconds" >&2
+    exit 1
+  fi
   sleep 1
 done
 
