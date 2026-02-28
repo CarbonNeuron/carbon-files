@@ -121,4 +121,26 @@ public sealed class FileService : IFileService
             await _db.SaveChangesAsync();
         }
     }
+
+    public async Task<bool> UpdateFileSizeAsync(string bucketId, string path, long newSize)
+    {
+        var normalized = path.ToLowerInvariant();
+        var entity = await _db.Files.FirstOrDefaultAsync(f => f.BucketId == bucketId && f.Path == normalized);
+        if (entity == null)
+            return false;
+
+        var oldSize = entity.Size;
+        entity.Size = newSize;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        // Update bucket total size
+        var bucket = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == bucketId);
+        if (bucket != null)
+        {
+            bucket.TotalSize = Math.Max(0, bucket.TotalSize - oldSize + newSize);
+        }
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
 }

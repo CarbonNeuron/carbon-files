@@ -54,6 +54,27 @@ public sealed class FileStorageService
         return File.Exists(path);
     }
 
+    public async Task<long> PatchFileAsync(string bucketId, string filePath, Stream content, long offset, bool append)
+    {
+        var path = GetFilePath(bucketId, filePath);
+        if (!File.Exists(path))
+            return -1;
+
+        await using var fs = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None, 81920);
+
+        if (append)
+        {
+            fs.Seek(0, SeekOrigin.End);
+        }
+        else
+        {
+            fs.Seek(offset, SeekOrigin.Begin);
+        }
+
+        await content.CopyToAsync(fs);
+        return fs.Length;
+    }
+
     public void DeleteFile(string bucketId, string filePath)
     {
         var path = GetFilePath(bucketId, filePath);

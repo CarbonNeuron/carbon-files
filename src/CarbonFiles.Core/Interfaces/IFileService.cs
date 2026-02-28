@@ -8,4 +8,5 @@ public interface IFileService
     Task<BucketFile?> GetMetadataAsync(string bucketId, string path);
     Task<bool> DeleteAsync(string bucketId, string path, AuthContext auth);
     Task UpdateLastUsedAsync(string bucketId);
+    Task<bool> UpdateFileSizeAsync(string bucketId, string path, long newSize);
 }

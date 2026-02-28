@@ -1,7 +1,9 @@
 using CarbonFiles.Api.Auth;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
+using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace CarbonFiles.Api.Endpoints;
 
@@ -61,6 +63,80 @@ public static class FileEndpoints
 
             var deleted = await fileService.DeleteAsync(id, filePath, auth);
             return deleted ? Results.NoContent() : Results.Json(new ErrorResponse { Error = "File not found" }, statusCode: 404);
+        });
+
+        // PATCH /api/buckets/{id}/files/{*filePath}/content — Partial file update
+        app.MapMethods("/api/buckets/{id}/files/{*filePath}", new[] { "PATCH" }, async (string id, string filePath, HttpContext ctx,
+            IFileService fileService, FileStorageService storageService, IBucketService bucketService, CarbonFilesDbContext db) =>
+        {
+            // Only handle paths ending with /content
+            if (!filePath.EndsWith("/content", StringComparison.OrdinalIgnoreCase))
+                return Results.NotFound();
+
+            var actualPath = filePath[..^"/content".Length];
+
+            // Check bucket exists
+            var bucket = await bucketService.GetByIdAsync(id);
+            if (bucket == null)
+                return Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
+
+            // Auth check: owner, admin, or upload token
+            var auth = ctx.GetAuthContext();
+            if (auth.IsPublic)
+            {
+                var token = ctx.Request.Query["token"].FirstOrDefault();
+                if (string.IsNullOrEmpty(token))
+                    return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key, admin key, or upload token." }, statusCode: 403);
+
+                // Validate upload token
+                var uploadToken = await db.UploadTokens.FirstOrDefaultAsync(t => t.Token == token && t.BucketId == id);
+                if (uploadToken == null || uploadToken.ExpiresAt <= DateTime.UtcNow)
+                    return Results.Json(new ErrorResponse { Error = "Invalid or expired upload token" }, statusCode: 403);
+
+                if (uploadToken.MaxUploads.HasValue && uploadToken.UploadsUsed >= uploadToken.MaxUploads.Value)
+                    return Results.Json(new ErrorResponse { Error = "Upload token has reached its maximum number of uploads" }, statusCode: 403);
+
+                auth = AuthContext.Admin();
+            }
+
+            // Check if file exists
+            var meta = await fileService.GetMetadataAsync(id, actualPath);
+            if (meta == null)
+                return Results.Json(new ErrorResponse { Error = "File not found", Hint = "Use upload endpoints to create files." }, statusCode: 404);
+
+            // Check X-Append header
+            var isAppend = ctx.Request.Headers["X-Append"].FirstOrDefault()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+
+            long offset = 0;
+            if (!isAppend)
+            {
+                // Parse Content-Range header
+                var contentRange = ctx.Request.Headers.ContentRange.FirstOrDefault();
+                if (contentRange == null || !contentRange.StartsWith("bytes "))
+                    return Results.Json(new ErrorResponse { Error = "Content-Range header required for non-append PATCH" }, statusCode: 400);
+
+                var rangePart = contentRange["bytes ".Length..];
+                var slashIndex = rangePart.IndexOf('/');
+                if (slashIndex > 0)
+                    rangePart = rangePart[..slashIndex];
+
+                var dashIndex = rangePart.IndexOf('-');
+                if (dashIndex < 0 || !long.TryParse(rangePart[..dashIndex], out offset))
+                    return Results.Json(new ErrorResponse { Error = "Invalid Content-Range" }, statusCode: 400);
+
+                // Validate range
+                if (offset < 0 || offset > meta.Size)
+                    return Results.Json(new ErrorResponse { Error = "Range not satisfiable" }, statusCode: 416);
+            }
+
+            var newSize = await storageService.PatchFileAsync(id, actualPath, ctx.Request.Body, offset, isAppend);
+            if (newSize < 0)
+                return Results.NotFound();
+
+            // Update file metadata in DB
+            await fileService.UpdateFileSizeAsync(id, actualPath, newSize);
+
+            return Results.Ok(await fileService.GetMetadataAsync(id, actualPath));
         });
     }
 
