@@ -1,4 +1,5 @@
 using CarbonFiles.Api.Auth;
+using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
@@ -14,20 +15,20 @@ public static class UploadTokenEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (auth.IsPublic)
-                return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, statusCode: 403);
+                return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             try
             {
                 var result = await svc.CreateAsync(id, request ?? new(), auth);
                 if (result == null)
                 {
-                    return Results.Json(new ErrorResponse { Error = "Bucket not found or access denied" }, statusCode: 404);
+                    return Results.Json(new ErrorResponse { Error = "Bucket not found or access denied" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
                 }
                 return Results.Created($"/api/buckets/{id}/tokens", result);
             }
             catch (ArgumentException ex)
             {
-                return Results.Json(new ErrorResponse { Error = ex.Message }, statusCode: 400);
+                return Results.Json(new ErrorResponse { Error = ex.Message }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
             }
         })
         .WithTags("Upload Tokens")

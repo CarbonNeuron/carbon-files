@@ -1,4 +1,5 @@
 using CarbonFiles.Api.Auth;
+using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Responses;
 using CarbonFiles.Infrastructure.Data;
@@ -14,7 +15,7 @@ public static class StatsEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (!auth.IsAdmin)
-                return Results.Json(new ErrorResponse { Error = "Admin access required" }, statusCode: 403);
+                return Results.Json(new ErrorResponse { Error = "Admin access required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             var now = DateTime.UtcNow;
             var activeBuckets = db.Buckets.Where(b => b.ExpiresAt == null || b.ExpiresAt > now);

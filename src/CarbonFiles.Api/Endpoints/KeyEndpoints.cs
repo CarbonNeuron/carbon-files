@@ -1,4 +1,5 @@
 using CarbonFiles.Api.Auth;
+using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
@@ -16,10 +17,10 @@ public static class KeyEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (!auth.IsAdmin)
-                return Results.Json(new ErrorResponse { Error = "Admin access required", Hint = "Use the admin key or a dashboard token." }, statusCode: 403);
+                return Results.Json(new ErrorResponse { Error = "Admin access required", Hint = "Use the admin key or a dashboard token." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             if (string.IsNullOrWhiteSpace(request.Name))
-                return Results.Json(new ErrorResponse { Error = "Name is required" }, statusCode: 400);
+                return Results.Json(new ErrorResponse { Error = "Name is required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
 
             var result = await svc.CreateAsync(request.Name);
             return Results.Created($"/api/keys/{result.Prefix}", result);
@@ -33,7 +34,7 @@ public static class KeyEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (!auth.IsAdmin)
-                return Results.Json(new ErrorResponse { Error = "Admin access required" }, statusCode: 403);
+                return Results.Json(new ErrorResponse { Error = "Admin access required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             var result = await svc.ListAsync(new PaginationParams { Limit = limit, Offset = offset, Sort = sort, Order = order });
             return Results.Ok(result);
@@ -46,10 +47,10 @@ public static class KeyEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (!auth.IsAdmin)
-                return Results.Json(new ErrorResponse { Error = "Admin access required" }, statusCode: 403);
+                return Results.Json(new ErrorResponse { Error = "Admin access required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             var deleted = await svc.DeleteAsync(prefix);
-            return deleted ? Results.NoContent() : Results.Json(new ErrorResponse { Error = "API key not found" }, statusCode: 404);
+            return deleted ? Results.NoContent() : Results.Json(new ErrorResponse { Error = "API key not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
         .WithSummary("Revoke API key")
         .WithDescription("Auth: Admin only. Permanently revokes an API key by its prefix.");
@@ -59,10 +60,10 @@ public static class KeyEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (!auth.IsAdmin)
-                return Results.Json(new ErrorResponse { Error = "Admin access required" }, statusCode: 403);
+                return Results.Json(new ErrorResponse { Error = "Admin access required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             var result = await svc.GetUsageAsync(prefix);
-            return result != null ? Results.Ok(result) : Results.Json(new ErrorResponse { Error = "API key not found" }, statusCode: 404);
+            return result != null ? Results.Ok(result) : Results.Json(new ErrorResponse { Error = "API key not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
         .WithSummary("Get API key usage")
         .WithDescription("Auth: Admin only. Returns detailed usage statistics for an API key (bucket count, file count, total size).");

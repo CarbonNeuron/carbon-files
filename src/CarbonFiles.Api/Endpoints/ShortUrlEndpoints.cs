@@ -1,4 +1,5 @@
 using CarbonFiles.Api.Auth;
+using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 
@@ -24,7 +25,7 @@ public static class ShortUrlEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (auth.IsPublic)
-                return Results.Json(new ErrorResponse { Error = "Authentication required" }, statusCode: 401);
+                return Results.Json(new ErrorResponse { Error = "Authentication required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 401);
 
             var deleted = await svc.DeleteAsync(code, auth);
             return deleted ? Results.NoContent() : Results.NotFound();

@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using CarbonFiles.Api.Auth;
+using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
@@ -21,10 +22,10 @@ public static class BucketEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (auth.IsPublic)
-                return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, statusCode: 403);
+                return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             if (string.IsNullOrWhiteSpace(request.Name))
-                return Results.Json(new ErrorResponse { Error = "Name is required" }, statusCode: 400);
+                return Results.Json(new ErrorResponse { Error = "Name is required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
 
             try
             {
@@ -33,7 +34,7 @@ public static class BucketEndpoints
             }
             catch (ArgumentException ex)
             {
-                return Results.Json(new ErrorResponse { Error = ex.Message }, statusCode: 400);
+                return Results.Json(new ErrorResponse { Error = ex.Message }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
             }
         })
         .WithSummary("Create bucket")
@@ -46,7 +47,7 @@ public static class BucketEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (auth.IsPublic)
-                return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, statusCode: 403);
+                return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             // Only admin can include expired
             var includeExpired = include_expired && auth.IsAdmin;
@@ -66,7 +67,7 @@ public static class BucketEndpoints
             var result = await svc.GetByIdAsync(id);
             return result != null
                 ? Results.Ok(result)
-                : Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
+                : Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
         .WithSummary("Get bucket")
         .WithDescription("Public. Returns bucket details including file list.");
@@ -76,11 +77,11 @@ public static class BucketEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (auth.IsPublic)
-                return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, statusCode: 403);
+                return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             // At least one field required
             if (request.Name == null && request.Description == null && request.ExpiresIn == null)
-                return Results.Json(new ErrorResponse { Error = "At least one field is required" }, statusCode: 400);
+                return Results.Json(new ErrorResponse { Error = "At least one field is required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
 
             try
             {
@@ -90,14 +91,14 @@ public static class BucketEndpoints
                     // Need to distinguish 404 vs 403 — check if bucket exists
                     var existing = await svc.GetByIdAsync(id);
                     if (existing == null)
-                        return Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
-                    return Results.Json(new ErrorResponse { Error = "Access denied" }, statusCode: 403);
+                        return Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
+                    return Results.Json(new ErrorResponse { Error = "Access denied" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
                 }
                 return Results.Ok(result);
             }
             catch (ArgumentException ex)
             {
-                return Results.Json(new ErrorResponse { Error = ex.Message }, statusCode: 400);
+                return Results.Json(new ErrorResponse { Error = ex.Message }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
             }
         })
         .WithSummary("Update bucket")
@@ -108,7 +109,7 @@ public static class BucketEndpoints
         {
             var auth = ctx.GetAuthContext();
             if (auth.IsPublic)
-                return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, statusCode: 403);
+                return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key or admin key." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
             var result = await svc.DeleteAsync(id, auth);
             if (!result)
@@ -116,8 +117,8 @@ public static class BucketEndpoints
                 // Need to distinguish 404 vs 403 — check if bucket exists
                 var existing = await svc.GetByIdAsync(id);
                 if (existing == null)
-                    return Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
-                return Results.Json(new ErrorResponse { Error = "Access denied" }, statusCode: 403);
+                    return Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
+                return Results.Json(new ErrorResponse { Error = "Access denied" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
             }
             return Results.NoContent();
         })
@@ -130,7 +131,7 @@ public static class BucketEndpoints
             var result = await svc.GetSummaryAsync(id);
             return result != null
                 ? Results.Text(result, "text/plain")
-                : Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
+                : Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
         })
         .WithSummary("Get bucket summary")
         .WithDescription("Public. Returns a plaintext summary of the bucket suitable for LLM context or previews.");
@@ -140,7 +141,7 @@ public static class BucketEndpoints
         {
             var bucket = await db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
             if (bucket == null || (bucket.ExpiresAt != null && bucket.ExpiresAt < DateTime.UtcNow))
-                return Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
+                return Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
 
             // Log warning for large buckets
             if (bucket.FileCount > 10000 || bucket.TotalSize > 10L * 1024 * 1024 * 1024)

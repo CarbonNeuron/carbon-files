@@ -1,4 +1,5 @@
 using CarbonFiles.Api.Auth;
+using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Configuration;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
@@ -22,7 +23,7 @@ public static class UploadEndpoints
             // Check bucket exists
             var bucket = await bucketService.GetByIdAsync(id);
             if (bucket == null)
-                return Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
+                return Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
 
             // Auth check: owner, admin, or upload token
             var auth = ctx.GetAuthContext();
@@ -31,12 +32,12 @@ public static class UploadEndpoints
             {
                 var token = ctx.Request.Query["token"].FirstOrDefault();
                 if (string.IsNullOrEmpty(token))
-                    return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key, admin key, or upload token." }, statusCode: 403);
+                    return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key, admin key, or upload token." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
                 // Validate upload token via service
                 var (tokenBucketId, isValid) = await uploadTokenService.ValidateAsync(token);
                 if (!isValid || tokenBucketId != id)
-                    return Results.Json(new ErrorResponse { Error = "Invalid or expired upload token" }, statusCode: 403);
+                    return Results.Json(new ErrorResponse { Error = "Invalid or expired upload token" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
                 validatedToken = token;
                 // Use admin auth context for upload token (it's authorized)
@@ -44,7 +45,7 @@ public static class UploadEndpoints
             }
 
             if (!ctx.Request.HasFormContentType)
-                return Results.Json(new ErrorResponse { Error = "Expected multipart/form-data" }, statusCode: 400);
+                return Results.Json(new ErrorResponse { Error = "Expected multipart/form-data" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
 
             var form = await ctx.Request.ReadFormAsync();
             var uploaded = new List<BucketFile>();
@@ -56,11 +57,11 @@ public static class UploadEndpoints
                 var path = GenericNames.Contains(file.Name) ? file.FileName : file.Name;
 
                 if (string.IsNullOrWhiteSpace(path))
-                    return Results.Json(new ErrorResponse { Error = "File path could not be determined" }, statusCode: 400);
+                    return Results.Json(new ErrorResponse { Error = "File path could not be determined" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
 
                 // Check max upload size
                 if (maxUploadSize > 0 && file.Length > maxUploadSize)
-                    return Results.Json(new ErrorResponse { Error = "File too large" }, statusCode: 413);
+                    return Results.Json(new ErrorResponse { Error = "File too large" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 413);
 
                 await using var stream = file.OpenReadStream();
                 var result = await uploadService.StoreFileAsync(id, path, stream, auth);
@@ -88,7 +89,7 @@ public static class UploadEndpoints
             // Check bucket exists
             var bucket = await bucketService.GetByIdAsync(id);
             if (bucket == null)
-                return Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
+                return Results.Json(new ErrorResponse { Error = "Bucket not found" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 404);
 
             // Auth check: owner, admin, or upload token
             var auth = ctx.GetAuthContext();
@@ -97,12 +98,12 @@ public static class UploadEndpoints
             {
                 var token = ctx.Request.Query["token"].FirstOrDefault();
                 if (string.IsNullOrEmpty(token))
-                    return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key, admin key, or upload token." }, statusCode: 403);
+                    return Results.Json(new ErrorResponse { Error = "Authentication required", Hint = "Use an API key, admin key, or upload token." }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
                 // Validate upload token via service
                 var (tokenBucketId, isValid) = await uploadTokenService.ValidateAsync(token);
                 if (!isValid || tokenBucketId != id)
-                    return Results.Json(new ErrorResponse { Error = "Invalid or expired upload token" }, statusCode: 403);
+                    return Results.Json(new ErrorResponse { Error = "Invalid or expired upload token" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
 
                 validatedToken = token;
                 auth = AuthContext.Admin();
@@ -110,7 +111,7 @@ public static class UploadEndpoints
 
             var filename = ctx.Request.Query["filename"].FirstOrDefault();
             if (string.IsNullOrEmpty(filename))
-                return Results.Json(new ErrorResponse { Error = "filename query parameter is required" }, statusCode: 400);
+                return Results.Json(new ErrorResponse { Error = "filename query parameter is required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 400);
 
             var result = await uploadService.StoreFileAsync(id, filename, ctx.Request.Body, auth);
 
