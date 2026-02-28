@@ -7,6 +7,10 @@
     <PublishTrimmed>true</PublishTrimmed>
     <PublishSingleFile>true</PublishSingleFile>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- EF Core uses reflection-based expression trees that produce trim warnings.
+         These are unavoidable when using EF Core with PublishTrimmed. The JIT runtime
+         handles these correctly — they only matter for full Native AOT (which we don't use). -->
+    <NoWarn>$(NoWarn);IL2026;IL2104;IL3050</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

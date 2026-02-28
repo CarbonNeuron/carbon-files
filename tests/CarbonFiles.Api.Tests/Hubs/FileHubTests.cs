@@ -97,7 +97,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive FileCreated event within 5 seconds");
 
-        var (eventBucketId, eventFile) = receivedEvent.Task.Result;
+        var (eventBucketId, eventFile) = await receivedEvent.Task;
         eventBucketId.Should().Be(bucketId);
         eventFile.GetProperty("path").GetString().Should().Be("test.txt");
 
@@ -136,7 +136,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive FileUpdated event within 5 seconds");
 
-        var (eventBucketId, eventFile) = receivedEvent.Task.Result;
+        var (eventBucketId, eventFile) = await receivedEvent.Task;
         eventBucketId.Should().Be(bucketId);
         eventFile.GetProperty("path").GetString().Should().Be("doc.txt");
 
@@ -175,7 +175,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive FileDeleted event within 5 seconds");
 
-        var (eventBucketId, eventPath) = receivedEvent.Task.Result;
+        var (eventBucketId, eventPath) = await receivedEvent.Task;
         eventBucketId.Should().Be(bucketId);
         eventPath.Should().Be("delete-me.txt");
 
@@ -223,7 +223,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive BucketCreated event within 5 seconds");
 
-        var eventBucket = receivedEvent.Task.Result;
+        var eventBucket = await receivedEvent.Task;
         eventBucket.GetProperty("name").GetString().Should().Be("global-notify-test");
 
         await connection.StopAsync(TestContext.Current.CancellationToken);
@@ -300,7 +300,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive BucketDeleted event within 5 seconds");
 
-        receivedEvent.Task.Result.Should().Be(bucketId);
+        (await receivedEvent.Task).Should().Be(bucketId);
 
         await connection.StopAsync(TestContext.Current.CancellationToken);
     }
@@ -333,7 +333,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive BucketUpdated event within 5 seconds");
 
-        var (eventBucketId, eventChanges) = receivedEvent.Task.Result;
+        var (eventBucketId, eventChanges) = await receivedEvent.Task;
         eventBucketId.Should().Be(bucketId);
         eventChanges.GetProperty("name").GetString().Should().Be("updated-signalr-test");
 
