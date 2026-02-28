@@ -1,6 +1,7 @@
 using CarbonFiles.Api.Auth;
 using CarbonFiles.Api.Endpoints;
 using CarbonFiles.Api.Hubs;
+using CarbonFiles.Api.Middleware;
 using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Infrastructure;
@@ -169,6 +170,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Middleware
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseCors();
 app.UseMiddleware<AuthMiddleware>();
 
