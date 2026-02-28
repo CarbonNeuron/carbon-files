@@ -13,11 +13,13 @@ namespace CarbonFiles.Infrastructure.Services;
 public sealed class UploadTokenService : IUploadTokenService
 {
     private readonly CarbonFilesDbContext _db;
+    private readonly ICacheService _cache;
     private readonly ILogger<UploadTokenService> _logger;
 
-    public UploadTokenService(CarbonFilesDbContext db, ILogger<UploadTokenService> logger)
+    public UploadTokenService(CarbonFilesDbContext db, ICacheService cache, ILogger<UploadTokenService> logger)
     {
         _db = db;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -50,6 +52,7 @@ public sealed class UploadTokenService : IUploadTokenService
         _db.UploadTokens.Add(entity);
         await _db.SaveChangesAsync();
 
+        _cache.InvalidateStats();
         _logger.LogInformation("Created upload token for bucket {BucketId} (expires {ExpiresAt}, max uploads {MaxUploads})",
             bucketId, entity.ExpiresAt.ToString("o"), request.MaxUploads?.ToString() ?? "unlimited");
 
@@ -65,6 +68,10 @@ public sealed class UploadTokenService : IUploadTokenService
 
     public async Task<(string BucketId, bool IsValid)> ValidateAsync(string token)
     {
+        var cached = _cache.GetUploadToken(token);
+        if (cached != null)
+            return cached.Value;
+
         var entity = await _db.UploadTokens.FirstOrDefaultAsync(t => t.Token == token);
         if (entity == null)
         {
@@ -76,6 +83,7 @@ public sealed class UploadTokenService : IUploadTokenService
         if (entity.ExpiresAt <= DateTime.UtcNow)
         {
             _logger.LogDebug("Upload token for bucket {BucketId} is expired", entity.BucketId);
+            _cache.SetUploadToken(token, entity.BucketId, false);
             return (entity.BucketId, false);
         }
 
@@ -83,9 +91,11 @@ public sealed class UploadTokenService : IUploadTokenService
         if (entity.MaxUploads.HasValue && entity.UploadsUsed >= entity.MaxUploads.Value)
         {
             _logger.LogDebug("Upload token for bucket {BucketId} exhausted ({Used}/{Max})", entity.BucketId, entity.UploadsUsed, entity.MaxUploads.Value);
+            _cache.SetUploadToken(token, entity.BucketId, false);
             return (entity.BucketId, false);
         }
 
+        _cache.SetUploadToken(token, entity.BucketId, true);
         return (entity.BucketId, true);
     }
 
@@ -95,5 +105,7 @@ public sealed class UploadTokenService : IUploadTokenService
         await _db.UploadTokens
             .Where(t => t.Token == token)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.UploadsUsed, t => t.UploadsUsed + count));
+
+        _cache.InvalidateUploadToken(token);
     }
 }

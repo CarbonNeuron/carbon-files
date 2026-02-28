@@ -1,3 +1,4 @@
+using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
@@ -24,7 +25,7 @@ public class ShortUrlServiceTests : IDisposable
         _db.Database.OpenConnection();
         _db.Database.EnsureCreated();
 
-        _sut = new ShortUrlService(_db, NullLogger<ShortUrlService>.Instance);
+        _sut = new ShortUrlService(_db, new NullCacheService(), NullLogger<ShortUrlService>.Instance);
     }
 
     public void Dispose()

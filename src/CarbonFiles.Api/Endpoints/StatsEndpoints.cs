@@ -1,5 +1,6 @@
 using CarbonFiles.Api.Auth;
 using CarbonFiles.Api.Serialization;
+using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Responses;
 using CarbonFiles.Infrastructure.Data;
@@ -11,12 +12,16 @@ public static class StatsEndpoints
 {
     public static void MapStatsEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/stats", async (HttpContext ctx, CarbonFilesDbContext db, ILoggerFactory loggerFactory) =>
+        app.MapGet("/api/stats", async (HttpContext ctx, CarbonFilesDbContext db, ICacheService cache, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.StatsEndpoints");
             var auth = ctx.GetAuthContext();
             if (!auth.IsAdmin)
                 return Results.Json(new ErrorResponse { Error = "Admin access required" }, CarbonFilesJsonContext.Default.ErrorResponse, statusCode: 403);
+
+            var cachedStats = cache.GetStats();
+            if (cachedStats != null)
+                return Results.Ok(cachedStats);
 
             var now = DateTime.UtcNow;
             var activeBuckets = db.Buckets.Where(b => b.ExpiresAt == null || b.ExpiresAt > now);
@@ -40,6 +45,7 @@ public static class StatsEndpoints
             };
 
             logger.LogDebug("Stats queried: {BucketCount} buckets, {FileCount} files", stats.TotalBuckets, stats.TotalFiles);
+            cache.SetStats(stats);
             return Results.Ok(stats);
         })
         .Produces<StatsResponse>(200)

@@ -1,4 +1,5 @@
 using CarbonFiles.Core.Configuration;
+using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +51,7 @@ public sealed class CleanupService : BackgroundService
         using var scope = _provider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<CarbonFilesDbContext>();
         var storage = scope.ServiceProvider.GetRequiredService<FileStorageService>();
+        var cache = scope.ServiceProvider.GetRequiredService<ICacheService>();
 
         var now = DateTime.UtcNow;
         var expired = await db.Buckets
@@ -65,6 +67,12 @@ public sealed class CleanupService : BackgroundService
             // Delete files from disk
             storage.DeleteBucketDir(bucket.Id);
 
+            // Invalidate cache entries for this bucket
+            cache.InvalidateBucket(bucket.Id);
+            cache.InvalidateFilesForBucket(bucket.Id);
+            cache.InvalidateShortUrlsForBucket(bucket.Id);
+            cache.InvalidateUploadTokensForBucket(bucket.Id);
+
             // Delete associated DB records
             await db.Files.Where(f => f.BucketId == bucket.Id).ExecuteDeleteAsync(ct);
             await db.ShortUrls.Where(s => s.BucketId == bucket.Id).ExecuteDeleteAsync(ct);
@@ -73,6 +81,7 @@ public sealed class CleanupService : BackgroundService
         }
 
         await db.SaveChangesAsync(ct);
+        cache.InvalidateStats();
         _logger.LogInformation("Cleaned up {Count} expired buckets", expired.Count);
     }
 }

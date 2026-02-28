@@ -1,4 +1,5 @@
 using CarbonFiles.Core.Configuration;
+using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
 using CarbonFiles.Infrastructure.Services;
@@ -56,6 +57,7 @@ public class CleanupServiceTests : IDisposable
         services.AddDbContext<CarbonFilesDbContext>(opts =>
             opts.UseSqlite(_keepAliveConnection.ConnectionString));
         services.AddSingleton(new FileStorageService(cfOptions, NullLogger<FileStorageService>.Instance));
+        services.AddSingleton<ICacheService>(new NullCacheService());
         _serviceProvider = services.BuildServiceProvider();
 
         _sut = new CleanupService(

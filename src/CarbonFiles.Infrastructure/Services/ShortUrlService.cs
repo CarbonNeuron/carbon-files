@@ -11,11 +11,13 @@ namespace CarbonFiles.Infrastructure.Services;
 public sealed class ShortUrlService : IShortUrlService
 {
     private readonly CarbonFilesDbContext _db;
+    private readonly ICacheService _cache;
     private readonly ILogger<ShortUrlService> _logger;
 
-    public ShortUrlService(CarbonFilesDbContext db, ILogger<ShortUrlService> logger)
+    public ShortUrlService(CarbonFilesDbContext db, ICacheService cache, ILogger<ShortUrlService> logger)
     {
         _db = db;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -45,6 +47,7 @@ public sealed class ShortUrlService : IShortUrlService
             _db.ShortUrls.Add(entity);
             await _db.SaveChangesAsync();
 
+            _cache.SetShortUrl(code, bucketId, filePath);
             _logger.LogInformation("Created short URL {Code} for bucket {BucketId} file {FilePath}", code, bucketId, filePath);
 
             return code;
@@ -55,6 +58,10 @@ public sealed class ShortUrlService : IShortUrlService
 
     public async Task<string?> ResolveAsync(string code)
     {
+        var cached = _cache.GetShortUrl(code);
+        if (cached != null)
+            return $"/api/buckets/{cached.Value.BucketId}/files/{cached.Value.FilePath}/content";
+
         var shortUrl = await _db.ShortUrls.FirstOrDefaultAsync(s => s.Code == code);
         if (shortUrl == null)
         {
@@ -73,6 +80,7 @@ public sealed class ShortUrlService : IShortUrlService
             return null;
         }
 
+        _cache.SetShortUrl(code, shortUrl.BucketId, shortUrl.FilePath);
         return $"/api/buckets/{shortUrl.BucketId}/files/{shortUrl.FilePath}/content";
     }
 
@@ -95,6 +103,7 @@ public sealed class ShortUrlService : IShortUrlService
 
         _logger.LogInformation("Deleted short URL {Code}", code);
 
+        _cache.InvalidateShortUrl(code);
         return true;
     }
 }

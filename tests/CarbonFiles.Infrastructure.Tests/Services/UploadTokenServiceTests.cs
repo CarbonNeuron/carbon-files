@@ -1,3 +1,4 @@
+using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
 using CarbonFiles.Infrastructure.Data;
@@ -25,7 +26,7 @@ public class UploadTokenServiceTests : IDisposable
         _db.Database.OpenConnection();
         _db.Database.EnsureCreated();
 
-        _sut = new UploadTokenService(_db, NullLogger<UploadTokenService>.Instance);
+        _sut = new UploadTokenService(_db, new NullCacheService(), NullLogger<UploadTokenService>.Instance);
     }
 
     public void Dispose()
