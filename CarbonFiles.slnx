@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CarbonFiles.Api/CarbonFiles.Api.csproj" />
+    <Project Path="src/CarbonFiles.Core/CarbonFiles.Core.csproj" />
+    <Project Path="src/CarbonFiles.Infrastructure/CarbonFiles.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CarbonFiles.Api.Tests/CarbonFiles.Api.Tests.csproj" />
+    <Project Path="tests/CarbonFiles.Core.Tests/CarbonFiles.Core.Tests.csproj" />
+    <Project Path="tests/CarbonFiles.Infrastructure.Tests/CarbonFiles.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

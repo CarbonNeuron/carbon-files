@@ -1,0 +1,6 @@
+@CarbonFiles.Api_HostAddress = http://localhost:5239
+
+GET {{CarbonFiles.Api_HostAddress}}/
+Accept: application/json
+
+###
