@@ -67,6 +67,8 @@ app.MapKeyEndpoints();
 app.MapBucketEndpoints();
 app.MapUploadEndpoints();
 app.MapFileEndpoints();
+app.MapTokenEndpoints();
+app.MapShortUrlEndpoints();
 
 // SignalR hub — will be added in Task 21
 // app.MapHub<FileHub>("/hub/files");

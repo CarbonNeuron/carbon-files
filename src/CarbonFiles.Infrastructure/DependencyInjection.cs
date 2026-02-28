@@ -27,12 +27,14 @@ public static class DependencyInjection
         services.AddSingleton(new JwtHelper(options.EffectiveJwtSecret));
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IApiKeyService, ApiKeyService>();
+        services.AddScoped<IDashboardTokenService, DashboardTokenService>();
         services.AddScoped<IBucketService, BucketService>();
 
         // File services
         services.AddSingleton<FileStorageService>();
         services.AddScoped<IFileService, FileService>();
         services.AddScoped<IUploadService, UploadService>();
+        services.AddScoped<IShortUrlService, ShortUrlService>();
 
         return services;
     }
