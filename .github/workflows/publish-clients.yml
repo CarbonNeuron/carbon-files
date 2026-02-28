@@ -53,6 +53,7 @@ jobs:
 
   publish-typescript:
     needs: export-spec
+    if: secrets.NPM_TOKEN != ''
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -88,6 +89,7 @@ jobs:
 
   publish-csharp:
     needs: export-spec
+    if: secrets.NUGET_API_KEY != ''
     runs-on: ubuntu-latest
     env:
       DOTNET_ROLL_FORWARD: LatestMajor
@@ -118,6 +120,7 @@ jobs:
 
   publish-python:
     needs: export-spec
+    if: secrets.PYPI_API_TOKEN != ''
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -157,6 +160,7 @@ jobs:
 
   publish-powershell:
     needs: export-spec
+    if: secrets.PSGALLERY_API_KEY != ''
     runs-on: ubuntu-latest
     defaults:
       run:
