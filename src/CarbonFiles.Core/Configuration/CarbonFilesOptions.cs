@@ -11,6 +11,7 @@ public sealed class CarbonFilesOptions
     public long MaxUploadSize { get; set; } = 0; // 0 = unlimited
     public int CleanupIntervalMinutes { get; set; } = 60;
     public string CorsOrigins { get; set; } = "*";
+    public bool EnableScalar { get; set; } = true;
 
     public string EffectiveJwtSecret => JwtSecret ?? AdminKey;
 }

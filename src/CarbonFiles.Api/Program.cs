@@ -85,9 +85,12 @@ app.MapStatsEndpoints();
 // SignalR hub
 app.MapHub<FileHub>("/hub/files");
 
-// OpenAPI + Scalar
+// OpenAPI (always available)
 app.MapOpenApi();
-app.MapScalarApiReference();
+
+// Scalar UI (configurable)
+if (builder.Configuration.GetValue<bool?>("CarbonFiles:EnableScalar") ?? true)
+    app.MapScalarApiReference();
 
 app.Run();
 
