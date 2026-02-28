@@ -23,7 +23,10 @@ public static class FileEndpoints
             var result = await fileService.ListAsync(id,
                 new PaginationParams { Limit = limit, Offset = offset, Sort = sort, Order = order });
             return Results.Ok(result);
-        });
+        })
+        .WithTags("Files")
+        .WithSummary("List files in bucket")
+        .WithDescription("Public. Returns a paginated list of files in the specified bucket.");
 
         // GET|HEAD /api/buckets/{id}/files/{*filePath} — File metadata or content download
         app.MapMethods("/api/buckets/{id}/files/{*filePath}", new[] { "GET", "HEAD" },
@@ -46,7 +49,10 @@ public static class FileEndpoints
             return meta != null
                 ? Results.Ok(meta)
                 : Results.Json(new ErrorResponse { Error = "File not found" }, statusCode: 404);
-        });
+        })
+        .WithTags("Files")
+        .WithSummary("Get file metadata or download content")
+        .WithDescription("Public. Returns file metadata at /files/{path}, or streams file content at /files/{path}/content. Supports Range requests, ETag, and conditional headers.");
 
         // DELETE /api/buckets/{id}/files/{*filePath} — Delete file (owner or admin)
         app.MapDelete("/api/buckets/{id}/files/{*filePath}", async (string id, string filePath, HttpContext ctx,
@@ -63,7 +69,10 @@ public static class FileEndpoints
 
             var deleted = await fileService.DeleteAsync(id, filePath, auth);
             return deleted ? Results.NoContent() : Results.Json(new ErrorResponse { Error = "File not found" }, statusCode: 404);
-        });
+        })
+        .WithTags("Files")
+        .WithSummary("Delete file")
+        .WithDescription("Auth: Bucket owner or admin. Permanently deletes a file from the bucket.");
 
         // PATCH /api/buckets/{id}/files/{*filePath}/content — Partial file update
         app.MapMethods("/api/buckets/{id}/files/{*filePath}", new[] { "PATCH" }, async (string id, string filePath, HttpContext ctx,
@@ -137,7 +146,10 @@ public static class FileEndpoints
             await fileService.UpdateFileSizeAsync(id, actualPath, newSize);
 
             return Results.Ok(await fileService.GetMetadataAsync(id, actualPath));
-        });
+        })
+        .WithTags("Files")
+        .WithSummary("Patch file content")
+        .WithDescription("Auth: Bucket owner, admin, or upload token (?token=). Writes to a byte range of an existing file using Content-Range, or appends with X-Append: true.");
     }
 
     private static async Task<IResult> ServeFileContent(string bucketId, string path, HttpContext ctx,

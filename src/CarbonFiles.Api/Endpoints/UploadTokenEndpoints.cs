@@ -29,6 +29,9 @@ public static class UploadTokenEndpoints
             {
                 return Results.Json(new ErrorResponse { Error = ex.Message }, statusCode: 400);
             }
-        }).WithTags("Upload Tokens");
+        })
+        .WithTags("Upload Tokens")
+        .WithSummary("Create upload token")
+        .WithDescription("Auth: Bucket owner or admin. Creates a scoped upload token for a specific bucket with optional expiry and upload limit.");
     }
 }

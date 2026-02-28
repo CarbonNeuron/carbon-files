@@ -37,6 +37,9 @@ public static class HealthEndpoints
                     CarbonFilesJsonContext.Default.HealthResponse,
                     statusCode: 503);
             }
-        }).WithTags("Health");
+        })
+        .WithTags("Health")
+        .WithSummary("Health check")
+        .WithDescription("Public. Returns API health status including uptime and database connectivity.");
     }
 }

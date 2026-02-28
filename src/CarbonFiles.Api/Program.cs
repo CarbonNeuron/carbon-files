@@ -26,7 +26,96 @@ builder.Services.AddSignalR()
     });
 
 // OpenAPI
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, ct) =>
+    {
+        document.Info = new Microsoft.OpenApi.OpenApiInfo
+        {
+            Title = "CarbonFiles API",
+            Version = "v1",
+            Description = "File-sharing API with bucket-based organization and API key authentication."
+        };
+
+        document.Components ??= new Microsoft.OpenApi.OpenApiComponents();
+        document.Components.SecuritySchemes = new Dictionary<string, Microsoft.OpenApi.IOpenApiSecurityScheme>
+        {
+            ["AdminKey"] = new Microsoft.OpenApi.OpenApiSecurityScheme
+            {
+                Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+                Scheme = "bearer",
+                Description = "Admin API key (set via CARBON_FILES__ADMIN_KEY). Full access to all resources."
+            },
+            ["ApiKey"] = new Microsoft.OpenApi.OpenApiSecurityScheme
+            {
+                Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+                Scheme = "bearer",
+                Description = "API key (cf4_prefix_secret). Access limited to own buckets."
+            },
+            ["DashboardToken"] = new Microsoft.OpenApi.OpenApiSecurityScheme
+            {
+                Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+                Scheme = "bearer",
+                Description = "Short-lived JWT dashboard token. Grants admin access."
+            },
+            ["UploadToken"] = new Microsoft.OpenApi.OpenApiSecurityScheme
+            {
+                Type = Microsoft.OpenApi.SecuritySchemeType.ApiKey,
+                In = Microsoft.OpenApi.ParameterLocation.Query,
+                Name = "token",
+                Description = "Upload token (cfu_...). Grants upload access to a specific bucket."
+            }
+        };
+
+        return Task.CompletedTask;
+    });
+
+    // Assign per-operation security requirements based on description conventions
+    options.AddOperationTransformer((operation, context, ct) =>
+    {
+        var desc = operation.Description ?? "";
+
+        // Public endpoints: explicitly empty security (override any global)
+        if (desc.StartsWith("Public", StringComparison.OrdinalIgnoreCase))
+        {
+            operation.Security = [];
+            return Task.CompletedTask;
+        }
+
+        var security = new List<Microsoft.OpenApi.OpenApiSecurityRequirement>();
+
+        if (desc.Contains("Admin only", StringComparison.OrdinalIgnoreCase))
+        {
+            // Admin key or dashboard token
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("AdminKey", null)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("DashboardToken", null)] = new List<string>() });
+        }
+        else if (desc.Contains("upload token", StringComparison.OrdinalIgnoreCase))
+        {
+            // Owner, admin, or upload token
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("ApiKey", null)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("AdminKey", null)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("UploadToken", null)] = new List<string>() });
+        }
+        else if (desc.Contains("Dashboard token", StringComparison.OrdinalIgnoreCase))
+        {
+            // Dashboard token only
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("DashboardToken", null)] = new List<string>() });
+        }
+        else if (desc.StartsWith("Auth:", StringComparison.OrdinalIgnoreCase))
+        {
+            // Owner or admin
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("ApiKey", null)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("AdminKey", null)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("DashboardToken", null)] = new List<string>() });
+        }
+
+        if (security.Count > 0)
+            operation.Security = security;
+
+        return Task.CompletedTask;
+    });
+});
 
 // Infrastructure (EF Core, auth)
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -102,7 +191,13 @@ app.MapOpenApi();
 
 // Scalar UI (configurable)
 if (builder.Configuration.GetValue<bool?>("CarbonFiles:EnableScalar") ?? true)
-    app.MapScalarApiReference();
+    app.MapScalarApiReference(options =>
+    {
+        options
+            .WithTitle("CarbonFiles API")
+            .WithDefaultHttpClient(ScalarTarget.Shell, ScalarClient.Curl)
+            .AddPreferredSecuritySchemes("AdminKey");
+    });
 
 app.Run();
 

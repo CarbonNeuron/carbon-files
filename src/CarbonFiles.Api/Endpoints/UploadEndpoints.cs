@@ -74,7 +74,11 @@ public static class UploadEndpoints
             }
 
             return Results.Created($"/api/buckets/{id}/files", new UploadResponse { Uploaded = uploaded });
-        }).DisableAntiforgery();
+        })
+        .DisableAntiforgery()
+        .WithTags("Uploads")
+        .WithSummary("Upload files (multipart)")
+        .WithDescription("Auth: Bucket owner, admin, or upload token (?token=). Upload one or more files via multipart/form-data. Field names become file paths unless generic (file, files, upload, etc.).");
 
         // PUT /api/buckets/{id}/upload/stream — Stream upload (single file)
         app.MapPut("/api/buckets/{id}/upload/stream", async (string id, HttpContext ctx,
@@ -117,6 +121,9 @@ public static class UploadEndpoints
             }
 
             return Results.Created($"/api/buckets/{id}/files/{result.Path}", new UploadResponse { Uploaded = [result] });
-        });
+        })
+        .WithTags("Uploads")
+        .WithSummary("Upload file (streaming)")
+        .WithDescription("Auth: Bucket owner, admin, or upload token (?token=). Stream-upload a single file. Requires ?filename= query parameter.");
     }
 }

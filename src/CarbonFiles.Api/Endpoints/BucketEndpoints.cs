@@ -35,7 +35,9 @@ public static class BucketEndpoints
             {
                 return Results.Json(new ErrorResponse { Error = ex.Message }, statusCode: 400);
             }
-        });
+        })
+        .WithSummary("Create bucket")
+        .WithDescription("Auth: API key owner or admin. Creates a new file bucket with optional expiry and description.");
 
         // GET /api/buckets — List buckets (admin sees all, API key sees own)
         group.MapGet("/", async (HttpContext ctx, IBucketService svc,
@@ -54,7 +56,9 @@ public static class BucketEndpoints
                 auth,
                 includeExpired);
             return Results.Ok(result);
-        });
+        })
+        .WithSummary("List buckets")
+        .WithDescription("Auth: API key owner or admin. Returns a paginated list of buckets. Admin sees all; API key sees own buckets only.");
 
         // GET /api/buckets/{id} — Get bucket with files (public access)
         group.MapGet("/{id}", async (string id, IBucketService svc) =>
@@ -63,7 +67,9 @@ public static class BucketEndpoints
             return result != null
                 ? Results.Ok(result)
                 : Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
-        });
+        })
+        .WithSummary("Get bucket")
+        .WithDescription("Public. Returns bucket details including file list.");
 
         // PATCH /api/buckets/{id} — Update bucket (owner or admin)
         group.MapPatch("/{id}", async (string id, UpdateBucketRequest request, HttpContext ctx, IBucketService svc) =>
@@ -93,7 +99,9 @@ public static class BucketEndpoints
             {
                 return Results.Json(new ErrorResponse { Error = ex.Message }, statusCode: 400);
             }
-        });
+        })
+        .WithSummary("Update bucket")
+        .WithDescription("Auth: Bucket owner or admin. Updates bucket name, description, or expiry.");
 
         // DELETE /api/buckets/{id} — Delete bucket (owner or admin)
         group.MapDelete("/{id}", async (string id, HttpContext ctx, IBucketService svc) =>
@@ -112,7 +120,9 @@ public static class BucketEndpoints
                 return Results.Json(new ErrorResponse { Error = "Access denied" }, statusCode: 403);
             }
             return Results.NoContent();
-        });
+        })
+        .WithSummary("Delete bucket")
+        .WithDescription("Auth: Bucket owner or admin. Permanently deletes a bucket and all its files.");
 
         // GET /api/buckets/{id}/summary — Plaintext summary (public access)
         group.MapGet("/{id}/summary", async (string id, IBucketService svc) =>
@@ -121,7 +131,9 @@ public static class BucketEndpoints
             return result != null
                 ? Results.Text(result, "text/plain")
                 : Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
-        });
+        })
+        .WithSummary("Get bucket summary")
+        .WithDescription("Public. Returns a plaintext summary of the bucket suitable for LLM context or previews.");
 
         // GET|HEAD /api/buckets/{id}/zip — Download bucket as ZIP (public access)
         group.MapMethods("/{id}/zip", new[] { "GET", "HEAD" }, async (string id, HttpContext ctx, CarbonFilesDbContext db, FileStorageService storage, ILogger<Program> logger) =>
@@ -160,6 +172,8 @@ public static class BucketEndpoints
             }
 
             return Results.Empty;
-        });
+        })
+        .WithSummary("Download bucket as ZIP")
+        .WithDescription("Public. Streams all files in the bucket as a ZIP archive. Supports HEAD requests for headers only.");
     }
 }

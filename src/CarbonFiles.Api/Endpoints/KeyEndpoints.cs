@@ -23,7 +23,9 @@ public static class KeyEndpoints
 
             var result = await svc.CreateAsync(request.Name);
             return Results.Created($"/api/keys/{result.Prefix}", result);
-        });
+        })
+        .WithSummary("Create API key")
+        .WithDescription("Auth: Admin only. Creates a new API key scoped to its own buckets. Returns the full key (only shown once).");
 
         // GET /api/keys — List all API keys (Admin only, paginated)
         group.MapGet("/", async (HttpContext ctx, IApiKeyService svc,
@@ -35,7 +37,9 @@ public static class KeyEndpoints
 
             var result = await svc.ListAsync(new PaginationParams { Limit = limit, Offset = offset, Sort = sort, Order = order });
             return Results.Ok(result);
-        });
+        })
+        .WithSummary("List API keys")
+        .WithDescription("Auth: Admin only. Returns a paginated list of all API keys (secrets are masked).");
 
         // DELETE /api/keys/{prefix} — Revoke API key (Admin only)
         group.MapDelete("/{prefix}", async (string prefix, HttpContext ctx, IApiKeyService svc) =>
@@ -46,7 +50,9 @@ public static class KeyEndpoints
 
             var deleted = await svc.DeleteAsync(prefix);
             return deleted ? Results.NoContent() : Results.Json(new ErrorResponse { Error = "API key not found" }, statusCode: 404);
-        });
+        })
+        .WithSummary("Revoke API key")
+        .WithDescription("Auth: Admin only. Permanently revokes an API key by its prefix.");
 
         // GET /api/keys/{prefix}/usage — Detailed key usage (Admin only)
         group.MapGet("/{prefix}/usage", async (string prefix, HttpContext ctx, IApiKeyService svc) =>
@@ -57,6 +63,8 @@ public static class KeyEndpoints
 
             var result = await svc.GetUsageAsync(prefix);
             return result != null ? Results.Ok(result) : Results.Json(new ErrorResponse { Error = "API key not found" }, statusCode: 404);
-        });
+        })
+        .WithSummary("Get API key usage")
+        .WithDescription("Auth: Admin only. Returns detailed usage statistics for an API key (bucket count, file count, total size).");
     }
 }

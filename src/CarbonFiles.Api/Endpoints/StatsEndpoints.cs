@@ -38,6 +38,9 @@ public static class StatsEndpoints
             };
 
             return Results.Ok(stats);
-        }).WithTags("Stats");
+        })
+        .WithTags("Stats")
+        .WithSummary("Get system statistics")
+        .WithDescription("Auth: Admin only. Returns system-wide statistics including total buckets, files, storage, and per-owner breakdowns.");
     }
 }

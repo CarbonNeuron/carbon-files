@@ -27,7 +27,9 @@ public static class TokenEndpoints
             {
                 return Results.Json(new ErrorResponse { Error = ex.Message }, statusCode: 400);
             }
-        });
+        })
+        .WithSummary("Create dashboard token")
+        .WithDescription("Auth: Admin only. Creates a short-lived JWT token for dashboard access with optional custom expiry.");
 
         // GET /api/tokens/dashboard/me — Validate current token
         group.MapGet("/me", (HttpContext ctx, IDashboardTokenService svc) =>
@@ -43,6 +45,8 @@ public static class TokenEndpoints
 
             var info = svc.ValidateToken(token);
             return info != null ? Results.Ok(info) : Results.Json(new ErrorResponse { Error = "Invalid or expired token" }, statusCode: 401);
-        });
+        })
+        .WithSummary("Validate dashboard token")
+        .WithDescription("Auth: Dashboard token (Bearer). Validates the current dashboard token and returns its metadata (expiry, issued at).");
     }
 }
