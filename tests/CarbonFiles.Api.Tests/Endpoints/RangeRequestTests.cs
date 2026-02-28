@@ -18,9 +18,9 @@ public class RangeRequestTests : IClassFixture<TestFixture>
 
     private async Task<string> CreateBucketAsync(HttpClient client)
     {
-        var response = await client.PostAsJsonAsync("/api/buckets", new { name = $"range-test-{Guid.NewGuid():N}" });
+        var response = await client.PostAsJsonAsync("/api/buckets", new { name = $"range-test-{Guid.NewGuid():N}" }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetProperty("id").GetString()!;
     }
@@ -32,7 +32,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         multipart.Add(fileContent, "file", fileName);
 
-        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", multipart);
+        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", multipart, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
@@ -67,11 +67,11 @@ public class RangeRequestTests : IClassFixture<TestFixture>
             $"/api/buckets/{bucketId}/files/{fileName}/content");
         request.Headers.Range = new RangeHeaderValue(0, 99);
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.PartialContent);
 
-        var body = await response.Content.ReadAsByteArrayAsync();
+        var body = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
         body.Length.Should().Be(100);
         body.Should().BeEquivalentTo(fileBytes[..100]);
     }
@@ -86,11 +86,11 @@ public class RangeRequestTests : IClassFixture<TestFixture>
             $"/api/buckets/{bucketId}/files/{fileName}/content");
         request.Headers.Range = new RangeHeaderValue(500, null);
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.PartialContent);
 
-        var body = await response.Content.ReadAsByteArrayAsync();
+        var body = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
         body.Length.Should().Be(500);
         body.Should().BeEquivalentTo(fileBytes[500..]);
     }
@@ -105,11 +105,11 @@ public class RangeRequestTests : IClassFixture<TestFixture>
             $"/api/buckets/{bucketId}/files/{fileName}/content");
         request.Headers.Range = new RangeHeaderValue(null, 100);
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.PartialContent);
 
-        var body = await response.Content.ReadAsByteArrayAsync();
+        var body = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
         body.Length.Should().Be(100);
         body.Should().BeEquivalentTo(fileBytes[900..]);
     }
@@ -124,7 +124,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
             $"/api/buckets/{bucketId}/files/{fileName}/content");
         request.Headers.Range = new RangeHeaderValue(9999, 99999);
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.RequestedRangeNotSatisfiable);
     }
@@ -138,7 +138,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
             $"/api/buckets/{bucketId}/files/{fileName}/content");
         request.Headers.Range = new RangeHeaderValue(100, 199);
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.PartialContent);
 
@@ -162,7 +162,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
             $"/api/buckets/{bucketId}/files/{fileName}/content");
         request.Headers.Range = new RangeHeaderValue(9999, 99999);
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.RequestedRangeNotSatisfiable);
 
@@ -179,7 +179,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
 
         // First, get the ETag
         var firstResponse = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files/{fileName}/content");
+            $"/api/buckets/{bucketId}/files/{fileName}/content", TestContext.Current.CancellationToken);
         firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var etag = firstResponse.Headers.ETag!.Tag;
 
@@ -189,11 +189,11 @@ public class RangeRequestTests : IClassFixture<TestFixture>
         request.Headers.Range = new RangeHeaderValue(0, 49);
         request.Headers.IfRange = new RangeConditionHeaderValue(new EntityTagHeaderValue(etag));
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.PartialContent);
 
-        var body = await response.Content.ReadAsByteArrayAsync();
+        var body = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
         body.Length.Should().Be(50);
         body.Should().BeEquivalentTo(fileBytes[..50]);
     }
@@ -209,11 +209,11 @@ public class RangeRequestTests : IClassFixture<TestFixture>
         request.Headers.Range = new RangeHeaderValue(0, 49);
         request.Headers.IfRange = new RangeConditionHeaderValue(new EntityTagHeaderValue("\"stale-etag\""));
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var body = await response.Content.ReadAsByteArrayAsync();
+        var body = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
         body.Length.Should().Be(1000);
         body.Should().BeEquivalentTo(fileBytes);
     }
@@ -227,7 +227,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
             $"/api/buckets/{bucketId}/files/{fileName}/content");
         request.Headers.Range = new RangeHeaderValue(0, 99);
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.PartialContent);
         response.Headers.ETag.Should().NotBeNull();
@@ -242,7 +242,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
             $"/api/buckets/{bucketId}/files/{fileName}/content");
         request.Headers.Range = new RangeHeaderValue(0, 99);
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.PartialContent);
         response.Headers.AcceptRanges.Should().Contain("bytes");
@@ -258,11 +258,11 @@ public class RangeRequestTests : IClassFixture<TestFixture>
             $"/api/buckets/{bucketId}/files/{fileName}/content");
         request.Headers.Range = new RangeHeaderValue(900, 9999);
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.PartialContent);
 
-        var body = await response.Content.ReadAsByteArrayAsync();
+        var body = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
         body.Length.Should().Be(100);
         body.Should().BeEquivalentTo(fileBytes[900..]);
 
@@ -281,7 +281,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
         var request = new HttpRequestMessage(HttpMethod.Head,
             $"/api/buckets/{bucketId}/files/{fileName}/content");
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -290,7 +290,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
         response.Content.Headers.ContentLength.Should().Be(1000);
 
         // Body should be empty
-        var body = await response.Content.ReadAsByteArrayAsync();
+        var body = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
         body.Length.Should().Be(0);
     }
 
@@ -302,7 +302,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
         var request = new HttpRequestMessage(HttpMethod.Head,
             $"/api/buckets/{bucketId}/files/{fileName}/content");
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.Should().Be("application/octet-stream");
@@ -317,7 +317,7 @@ public class RangeRequestTests : IClassFixture<TestFixture>
         var request = new HttpRequestMessage(HttpMethod.Head,
             $"/api/buckets/{bucketId}/files/nonexistent.bin/content");
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }

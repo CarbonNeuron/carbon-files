@@ -57,7 +57,7 @@ public class ApiKeyServiceTests : IDisposable
         var secret = result.Key[(result.Prefix.Length + 1)..];
 
         // Verify the stored entity has hashed secret, not plaintext
-        var entity = await _db.ApiKeys.FindAsync(result.Prefix);
+        var entity = await _db.ApiKeys.FindAsync(new object[] { result.Prefix }, TestContext.Current.CancellationToken);
         entity.Should().NotBeNull();
         entity!.HashedSecret.Should().NotBe(secret);
 
@@ -72,7 +72,7 @@ public class ApiKeyServiceTests : IDisposable
     {
         var result = await _sut.CreateAsync("stored-test");
 
-        var entity = await _db.ApiKeys.FindAsync(result.Prefix);
+        var entity = await _db.ApiKeys.FindAsync(new object[] { result.Prefix }, TestContext.Current.CancellationToken);
         entity.Should().NotBeNull();
         entity!.Name.Should().Be("stored-test");
         entity.Prefix.Should().Be(result.Prefix);
@@ -138,7 +138,7 @@ public class ApiKeyServiceTests : IDisposable
         var deleted = await _sut.DeleteAsync(created.Prefix);
 
         deleted.Should().BeTrue();
-        var entity = await _db.ApiKeys.FindAsync(created.Prefix);
+        var entity = await _db.ApiKeys.FindAsync(new object[] { created.Prefix }, TestContext.Current.CancellationToken);
         entity.Should().BeNull();
     }
 
@@ -222,7 +222,7 @@ public class ApiKeyServiceTests : IDisposable
             FileCount = 3,
             TotalSize = 2048
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await _sut.ListAsync(new PaginationParams());
         var item = result.Items.First(i => i.Prefix == created.Prefix);
@@ -263,7 +263,7 @@ public class ApiKeyServiceTests : IDisposable
             TotalSize = 5000,
             DownloadCount = 42
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await _sut.GetUsageAsync(created.Prefix);
 

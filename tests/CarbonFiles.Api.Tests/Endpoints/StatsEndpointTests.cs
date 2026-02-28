@@ -18,17 +18,17 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
 
     private static async Task<JsonElement> ParseJsonAsync(HttpResponseMessage response)
     {
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         return JsonDocument.Parse(json).RootElement;
     }
 
     private async Task<(HttpClient Client, string ApiKey, string Prefix)> CreateApiKeyClientAsync(string name)
     {
         using var admin = _fixture.CreateAdminClient();
-        var response = await admin.PostAsJsonAsync("/api/keys", new { name });
+        var response = await admin.PostAsJsonAsync("/api/keys", new { name }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         var apiKey = doc.RootElement.GetProperty("key").GetString()!;
         var prefix = doc.RootElement.GetProperty("prefix").GetString()!;
@@ -39,9 +39,9 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
 
     private async Task<string> CreateBucketAsync(HttpClient client, string name = "stats-bucket")
     {
-        var response = await client.PostAsJsonAsync("/api/buckets", new { name, expires_in = "never" });
+        var response = await client.PostAsJsonAsync("/api/buckets", new { name, expires_in = "never" }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetProperty("id").GetString()!;
     }
@@ -53,7 +53,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         multipart.Add(fileContent, "file", fileName);
 
-        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", multipart);
+        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", multipart, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
@@ -73,7 +73,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
             await UploadFileAsync(apiClient, bucketId, "file2.txt", "more data here");
         }
 
-        var response = await admin.GetAsync("/api/stats");
+        var response = await admin.GetAsync("/api/stats", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -88,7 +88,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetStats_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.GetAsync("/api/stats");
+        var response = await _fixture.Client.GetAsync("/api/stats", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -98,7 +98,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
         var (apiClient, _, _) = await CreateApiKeyClientAsync("non-admin-stats");
         using (apiClient)
         {
-            var response = await apiClient.GetAsync("/api/stats");
+            var response = await apiClient.GetAsync("/api/stats", TestContext.Current.CancellationToken);
             response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         }
     }
@@ -121,7 +121,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
         }
 
         using var admin = _fixture.CreateAdminClient();
-        var response = await admin.GetAsync("/api/stats");
+        var response = await admin.GetAsync("/api/stats", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -150,10 +150,10 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
     public async Task GetStats_ReturnsSnakeCaseJson()
     {
         using var admin = _fixture.CreateAdminClient();
-        var response = await admin.GetAsync("/api/stats");
+        var response = await admin.GetAsync("/api/stats", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         // Verify snake_case field names
         json.Should().Contain("\"total_buckets\":");

@@ -23,11 +23,11 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     public async Task CreateKey_AsAdmin_Returns201WithFullKey()
     {
         using var client = _fixture.CreateAdminClient();
-        var response = await client.PostAsJsonAsync("/api/keys", new { name = "test-agent" });
+        var response = await client.PostAsJsonAsync("/api/keys", new { name = "test-agent" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         json.Should().Contain("\"key\":");
         json.Should().Contain("cf4_");
         json.Should().Contain("\"prefix\":");
@@ -46,7 +46,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task CreateKey_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.PostAsJsonAsync("/api/keys", new { name = "test" });
+        var response = await _fixture.Client.PostAsJsonAsync("/api/keys", new { name = "test" }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -54,11 +54,11 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     public async Task CreateKey_EmptyName_Returns400()
     {
         using var client = _fixture.CreateAdminClient();
-        var response = await client.PostAsJsonAsync("/api/keys", new { name = "" });
+        var response = await client.PostAsJsonAsync("/api/keys", new { name = "" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         json.Should().Contain("\"error\":");
     }
 
@@ -66,7 +66,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     public async Task CreateKey_WhitespaceName_Returns400()
     {
         using var client = _fixture.CreateAdminClient();
-        var response = await client.PostAsJsonAsync("/api/keys", new { name = "   " });
+        var response = await client.PostAsJsonAsync("/api/keys", new { name = "   " }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -79,12 +79,12 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
 
         // Create a key first
-        await client.PostAsJsonAsync("/api/keys", new { name = "list-test" });
+        await client.PostAsJsonAsync("/api/keys", new { name = "list-test" }, TestContext.Current.CancellationToken);
 
-        var response = await client.GetAsync("/api/keys");
+        var response = await client.GetAsync("/api/keys", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         json.Should().Contain("\"items\":");
         json.Should().Contain("\"total\":");
         json.Should().Contain("\"limit\":");
@@ -94,7 +94,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ListKeys_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.GetAsync("/api/keys");
+        var response = await _fixture.Client.GetAsync("/api/keys", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -104,14 +104,14 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
 
         // Create a key
-        var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "secret-check" });
-        var createJson = await createResponse.Content.ReadAsStringAsync();
+        var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "secret-check" }, TestContext.Current.CancellationToken);
+        var createJson = await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var createDoc = JsonDocument.Parse(createJson);
         var fullKey = createDoc.RootElement.GetProperty("key").GetString()!;
 
         // List keys
-        var listResponse = await client.GetAsync("/api/keys");
-        var listJson = await listResponse.Content.ReadAsStringAsync();
+        var listResponse = await client.GetAsync("/api/keys", TestContext.Current.CancellationToken);
+        var listJson = await listResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         // The full key (with secret) should NOT appear in list response
         listJson.Should().NotContain(fullKey);
@@ -127,13 +127,13 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
 
         // Create several keys
         for (int i = 0; i < 3; i++)
-            await client.PostAsJsonAsync("/api/keys", new { name = $"page-test-{i}" });
+            await client.PostAsJsonAsync("/api/keys", new { name = $"page-test-{i}" }, TestContext.Current.CancellationToken);
 
         // Request with limit=1
-        var response = await client.GetAsync("/api/keys?limit=1&offset=0");
+        var response = await client.GetAsync("/api/keys?limit=1&offset=0", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         var items = doc.RootElement.GetProperty("items");
         items.GetArrayLength().Should().Be(1);
@@ -146,13 +146,13 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
 
         // Create keys with known names
-        await client.PostAsJsonAsync("/api/keys", new { name = "alpha-sort" });
-        await client.PostAsJsonAsync("/api/keys", new { name = "zeta-sort" });
+        await client.PostAsJsonAsync("/api/keys", new { name = "alpha-sort" }, TestContext.Current.CancellationToken);
+        await client.PostAsJsonAsync("/api/keys", new { name = "zeta-sort" }, TestContext.Current.CancellationToken);
 
-        var response = await client.GetAsync("/api/keys?sort=name&order=asc");
+        var response = await client.GetAsync("/api/keys?sort=name&order=asc", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         var items = doc.RootElement.GetProperty("items");
         items.GetArrayLength().Should().BeGreaterThanOrEqualTo(2);
@@ -173,17 +173,17 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
 
         // Create a key
-        var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "to-delete" });
-        var createJson = await createResponse.Content.ReadAsStringAsync();
+        var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "to-delete" }, TestContext.Current.CancellationToken);
+        var createJson = await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(createJson);
         var prefix = doc.RootElement.GetProperty("prefix").GetString()!;
 
         // Delete using prefix
-        var deleteResponse = await client.DeleteAsync($"/api/keys/{prefix}");
+        var deleteResponse = await client.DeleteAsync($"/api/keys/{prefix}", TestContext.Current.CancellationToken);
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Verify it's gone
-        var getResponse = await client.GetAsync($"/api/keys/{prefix}/usage");
+        var getResponse = await client.GetAsync($"/api/keys/{prefix}/usage", TestContext.Current.CancellationToken);
         getResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -191,14 +191,14 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     public async Task DeleteKey_NotFound_Returns404()
     {
         using var client = _fixture.CreateAdminClient();
-        var response = await client.DeleteAsync("/api/keys/cf4_nonexist");
+        var response = await client.DeleteAsync("/api/keys/cf4_nonexist", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
     public async Task DeleteKey_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.DeleteAsync("/api/keys/cf4_whatever");
+        var response = await _fixture.Client.DeleteAsync("/api/keys/cf4_whatever", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -210,16 +210,16 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
 
         // Create a key
-        var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "usage-test" });
-        var createJson = await createResponse.Content.ReadAsStringAsync();
+        var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "usage-test" }, TestContext.Current.CancellationToken);
+        var createJson = await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(createJson);
         var prefix = doc.RootElement.GetProperty("prefix").GetString()!;
 
         // Get usage
-        var usageResponse = await client.GetAsync($"/api/keys/{prefix}/usage");
+        var usageResponse = await client.GetAsync($"/api/keys/{prefix}/usage", TestContext.Current.CancellationToken);
         usageResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var usageJson = await usageResponse.Content.ReadAsStringAsync();
+        var usageJson = await usageResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         usageJson.Should().Contain("\"prefix\":");
         usageJson.Should().Contain("\"name\":\"usage-test\"");
         usageJson.Should().Contain("\"bucket_count\":");
@@ -235,15 +235,15 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
 
         // Create a key
-        var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "usage-secret-check" });
-        var createJson = await createResponse.Content.ReadAsStringAsync();
+        var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "usage-secret-check" }, TestContext.Current.CancellationToken);
+        var createJson = await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var createDoc = JsonDocument.Parse(createJson);
         var fullKey = createDoc.RootElement.GetProperty("key").GetString()!;
         var prefix = createDoc.RootElement.GetProperty("prefix").GetString()!;
 
         // Get usage — should not contain full key
-        var usageResponse = await client.GetAsync($"/api/keys/{prefix}/usage");
-        var usageJson = await usageResponse.Content.ReadAsStringAsync();
+        var usageResponse = await client.GetAsync($"/api/keys/{prefix}/usage", TestContext.Current.CancellationToken);
+        var usageJson = await usageResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         usageJson.Should().NotContain(fullKey);
     }
 
@@ -251,14 +251,14 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     public async Task GetKeyUsage_NotFound_Returns404()
     {
         using var client = _fixture.CreateAdminClient();
-        var response = await client.GetAsync("/api/keys/cf4_nonexist/usage");
+        var response = await client.GetAsync("/api/keys/cf4_nonexist/usage", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
     public async Task GetKeyUsage_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.GetAsync("/api/keys/cf4_whatever/usage");
+        var response = await _fixture.Client.GetAsync("/api/keys/cf4_whatever/usage", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 }

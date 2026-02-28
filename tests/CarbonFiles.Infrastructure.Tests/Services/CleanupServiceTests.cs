@@ -90,14 +90,14 @@ public class CleanupServiceTests : IDisposable
                 CreatedAt = DateTime.UtcNow.AddDays(-10),
                 ExpiresAt = DateTime.UtcNow.AddDays(-1)
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         using (var db = CreateDbContext())
         {
-            (await db.Buckets.FindAsync("exp0000001")).Should().BeNull();
+            (await db.Buckets.FindAsync(new object[] { "exp0000001" }, TestContext.Current.CancellationToken)).Should().BeNull();
         }
     }
 
@@ -114,14 +114,14 @@ public class CleanupServiceTests : IDisposable
                 CreatedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddDays(7)
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         using (var db = CreateDbContext())
         {
-            (await db.Buckets.FindAsync("act0000001")).Should().NotBeNull();
+            (await db.Buckets.FindAsync(new object[] { "act0000001" }, TestContext.Current.CancellationToken)).Should().NotBeNull();
         }
     }
 
@@ -138,14 +138,14 @@ public class CleanupServiceTests : IDisposable
                 CreatedAt = DateTime.UtcNow,
                 ExpiresAt = null
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         using (var db = CreateDbContext())
         {
-            (await db.Buckets.FindAsync("nev0000001")).Should().NotBeNull();
+            (await db.Buckets.FindAsync(new object[] { "nev0000001" }, TestContext.Current.CancellationToken)).Should().NotBeNull();
         }
     }
 
@@ -184,14 +184,14 @@ public class CleanupServiceTests : IDisposable
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         using (var db = CreateDbContext())
         {
-            (await db.Files.AnyAsync(f => f.BucketId == "exp0000002")).Should().BeFalse();
+            (await db.Files.AnyAsync(f => f.BucketId == "exp0000002", TestContext.Current.CancellationToken)).Should().BeFalse();
         }
     }
 
@@ -215,14 +215,14 @@ public class CleanupServiceTests : IDisposable
                 FilePath = "file.txt",
                 CreatedAt = DateTime.UtcNow
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         using (var db = CreateDbContext())
         {
-            (await db.ShortUrls.AnyAsync(s => s.BucketId == "exp0000003")).Should().BeFalse();
+            (await db.ShortUrls.AnyAsync(s => s.BucketId == "exp0000003", TestContext.Current.CancellationToken)).Should().BeFalse();
         }
     }
 
@@ -246,14 +246,14 @@ public class CleanupServiceTests : IDisposable
                 ExpiresAt = DateTime.UtcNow.AddDays(1),
                 CreatedAt = DateTime.UtcNow
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         using (var db = CreateDbContext())
         {
-            (await db.UploadTokens.AnyAsync(t => t.BucketId == "exp0000004")).Should().BeFalse();
+            (await db.UploadTokens.AnyAsync(t => t.BucketId == "exp0000004", TestContext.Current.CancellationToken)).Should().BeFalse();
         }
     }
 
@@ -274,10 +274,10 @@ public class CleanupServiceTests : IDisposable
                 CreatedAt = DateTime.UtcNow.AddDays(-10),
                 ExpiresAt = DateTime.UtcNow.AddDays(-1)
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         Directory.Exists(bucketDir).Should().BeFalse();
     }
@@ -295,14 +295,14 @@ public class CleanupServiceTests : IDisposable
                 CreatedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddDays(30)
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         using (var db = CreateDbContext())
         {
-            (await db.Buckets.CountAsync()).Should().Be(1);
+            (await db.Buckets.CountAsync(TestContext.Current.CancellationToken)).Should().Be(1);
         }
     }
 
@@ -327,15 +327,15 @@ public class CleanupServiceTests : IDisposable
                 CreatedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddDays(7)
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         using (var db = CreateDbContext())
         {
-            (await db.Buckets.FindAsync("exp0000006")).Should().BeNull();
-            (await db.Buckets.FindAsync("act0000003")).Should().NotBeNull();
+            (await db.Buckets.FindAsync(new object[] { "exp0000006" }, TestContext.Current.CancellationToken)).Should().BeNull();
+            (await db.Buckets.FindAsync(new object[] { "act0000003" }, TestContext.Current.CancellationToken)).Should().NotBeNull();
         }
     }
 
@@ -360,14 +360,14 @@ public class CleanupServiceTests : IDisposable
                 CreatedAt = DateTime.UtcNow.AddDays(-5),
                 ExpiresAt = DateTime.UtcNow.AddDays(-1)
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         using (var db = CreateDbContext())
         {
-            (await db.Buckets.CountAsync()).Should().Be(0);
+            (await db.Buckets.CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
         }
     }
 
@@ -415,18 +415,18 @@ public class CleanupServiceTests : IDisposable
                 ExpiresAt = DateTime.UtcNow.AddDays(1),
                 CreatedAt = DateTime.UtcNow
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await _sut.CleanupExpiredBucketsAsync(CancellationToken.None);
+        await _sut.CleanupExpiredBucketsAsync(TestContext.Current.CancellationToken);
 
         using (var db = CreateDbContext())
         {
             // All database records should be gone
-            (await db.Buckets.FindAsync("exp0000009")).Should().BeNull();
-            (await db.Files.AnyAsync(f => f.BucketId == "exp0000009")).Should().BeFalse();
-            (await db.ShortUrls.AnyAsync(s => s.BucketId == "exp0000009")).Should().BeFalse();
-            (await db.UploadTokens.AnyAsync(t => t.BucketId == "exp0000009")).Should().BeFalse();
+            (await db.Buckets.FindAsync(new object[] { "exp0000009" }, TestContext.Current.CancellationToken)).Should().BeNull();
+            (await db.Files.AnyAsync(f => f.BucketId == "exp0000009", TestContext.Current.CancellationToken)).Should().BeFalse();
+            (await db.ShortUrls.AnyAsync(s => s.BucketId == "exp0000009", TestContext.Current.CancellationToken)).Should().BeFalse();
+            (await db.UploadTokens.AnyAsync(t => t.BucketId == "exp0000009", TestContext.Current.CancellationToken)).Should().BeFalse();
         }
 
         // Directory should be gone

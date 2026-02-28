@@ -75,7 +75,7 @@ public class AuthServiceTests : IDisposable
             Name = "test-owner",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var fullKey = $"cf4_abcd1234_{secret}";
         var result = await _sut.ResolveAsync(fullKey);

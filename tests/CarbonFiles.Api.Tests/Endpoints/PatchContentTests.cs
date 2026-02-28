@@ -18,9 +18,9 @@ public class PatchContentTests : IClassFixture<TestFixture>
 
     private async Task<string> CreateBucketAsync(HttpClient client)
     {
-        var response = await client.PostAsJsonAsync("/api/buckets", new { name = $"patch-test-{Guid.NewGuid():N}" });
+        var response = await client.PostAsJsonAsync("/api/buckets", new { name = $"patch-test-{Guid.NewGuid():N}" }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetProperty("id").GetString()!;
     }
@@ -32,20 +32,20 @@ public class PatchContentTests : IClassFixture<TestFixture>
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         multipart.Add(fileContent, "file", fileName);
 
-        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", multipart);
+        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", multipart, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
     private async Task<byte[]> DownloadFileAsync(HttpClient client, string bucketId, string fileName)
     {
-        var response = await client.GetAsync($"/api/buckets/{bucketId}/files/{fileName}/content");
+        var response = await client.GetAsync($"/api/buckets/{bucketId}/files/{fileName}/content", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        return await response.Content.ReadAsByteArrayAsync();
+        return await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
     }
 
     private static async Task<JsonElement> ParseJsonAsync(HttpResponseMessage response)
     {
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         return JsonDocument.Parse(json).RootElement;
     }
 
@@ -83,7 +83,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             contentRange: "bytes 7-11/*");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Download and verify
@@ -110,7 +110,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             appendBody,
             append: true);
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Download and verify
@@ -132,7 +132,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             contentRange: "bytes 0-3/*");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
         var body = await ParseJsonAsync(response);
@@ -155,7 +155,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             contentRange: "bytes 0-6/*");
 
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -175,7 +175,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             $"/api/buckets/{bucketId}/files/no-range.txt/content",
             patchBody);
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         var body = await ParseJsonAsync(response);
@@ -196,7 +196,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             contentRange: "bytes gibberish");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -218,7 +218,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             contentRange: "bytes 100-103/*");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.RequestedRangeNotSatisfiable);
     }
 
@@ -240,7 +240,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             appendBody,
             append: true);
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Check metadata shows updated size
@@ -264,7 +264,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             contentRange: "bytes 2-4/*");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -290,7 +290,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             contentRange: "bytes 3-5/*");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Download and verify full content
@@ -314,7 +314,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             contentRange: "bytes 0-2/*");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var downloaded = await DownloadFileAsync(_fixture.Client, bucketId, "start-patch.txt");
@@ -339,7 +339,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             contentRange: "bytes */*",
             append: true);
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var downloaded = await DownloadFileAsync(_fixture.Client, bucketId, "star-append.txt");
@@ -358,7 +358,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
         await UploadFileAsync(client, bucketId, "bucket-size.txt", Encoding.UTF8.GetBytes("Hello"));
 
         // Check initial bucket stats
-        var bucketResp1 = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}");
+        var bucketResp1 = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         var bucket1 = await ParseJsonAsync(bucketResp1);
         var initialSize = bucket1.GetProperty("total_size").GetInt64();
         initialSize.Should().Be(5);
@@ -370,11 +370,11 @@ public class PatchContentTests : IClassFixture<TestFixture>
             appendBody,
             append: true);
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Check bucket stats updated
-        var bucketResp2 = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}");
+        var bucketResp2 = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         var bucket2 = await ParseJsonAsync(bucketResp2);
         bucket2.GetProperty("total_size").GetInt64().Should().Be(13); // 5 + 8
     }
@@ -395,7 +395,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             append: true);
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -418,7 +418,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             contentRange: "bytes 0-3/*");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -439,7 +439,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         request.Content.Headers.Add("Content-Range", "bytes 0-4/*");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

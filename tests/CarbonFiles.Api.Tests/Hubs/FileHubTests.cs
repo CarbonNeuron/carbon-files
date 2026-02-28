@@ -19,13 +19,13 @@ public class FileHubTests : IClassFixture<TestFixture>
 
     private static async Task<JsonElement> ParseJsonAsync(HttpResponseMessage response)
     {
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         return JsonDocument.Parse(json).RootElement;
     }
 
     private async Task<string> CreateBucketAsync(HttpClient client, string name = "hub-test")
     {
-        var response = await client.PostAsJsonAsync("/api/buckets", new { name });
+        var response = await client.PostAsJsonAsync("/api/buckets", new { name }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var body = await ParseJsonAsync(response);
         return body.GetProperty("id").GetString()!;
@@ -37,7 +37,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(content));
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
         multipart.Add(fileContent, "file", filename);
-        return await client.PostAsync($"/api/buckets/{bucketId}/upload", multipart);
+        return await client.PostAsync($"/api/buckets/{bucketId}/upload", multipart, TestContext.Current.CancellationToken);
     }
 
     private HubConnection CreateHubConnection(string hubUrl)
@@ -58,12 +58,12 @@ public class FileHubTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
 
         // The negotiate endpoint should be reachable
-        var response = await client.PostAsync("/hub/files/negotiate?negotiateVersion=1", null);
+        var response = await client.PostAsync("/hub/files/negotiate?negotiateVersion=1", null, TestContext.Current.CancellationToken);
 
         // SignalR negotiate endpoint returns 200 with connection info
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         doc.RootElement.TryGetProperty("connectionId", out _).Should().BeTrue();
     }
@@ -86,22 +86,22 @@ public class FileHubTests : IClassFixture<TestFixture>
             receivedEvent.TrySetResult((bId, file));
         });
 
-        await connection.StartAsync();
-        await connection.InvokeAsync("SubscribeToBucket", bucketId);
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+        await connection.InvokeAsync("SubscribeToBucket", bucketId, TestContext.Current.CancellationToken);
 
         // Upload a file via multipart
         var uploadResp = await UploadFileAsync(admin, bucketId, "test.txt", "hello world");
         uploadResp.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Wait for the event (with timeout)
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000));
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive FileCreated event within 5 seconds");
 
         var (eventBucketId, eventFile) = receivedEvent.Task.Result;
         eventBucketId.Should().Be(bucketId);
         eventFile.GetProperty("path").GetString().Should().Be("test.txt");
 
-        await connection.StopAsync();
+        await connection.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -125,22 +125,22 @@ public class FileHubTests : IClassFixture<TestFixture>
             receivedEvent.TrySetResult((bId, file));
         });
 
-        await connection.StartAsync();
-        await connection.InvokeAsync("SubscribeToFile", bucketId, "doc.txt");
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+        await connection.InvokeAsync("SubscribeToFile", bucketId, "doc.txt", TestContext.Current.CancellationToken);
 
         // Re-upload the file (same path triggers update)
         var uploadResp2 = await UploadFileAsync(admin, bucketId, "doc.txt", "version 2 with more content");
         uploadResp2.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Wait for the event
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000));
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive FileUpdated event within 5 seconds");
 
         var (eventBucketId, eventFile) = receivedEvent.Task.Result;
         eventBucketId.Should().Be(bucketId);
         eventFile.GetProperty("path").GetString().Should().Be("doc.txt");
 
-        await connection.StopAsync();
+        await connection.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -164,22 +164,22 @@ public class FileHubTests : IClassFixture<TestFixture>
             receivedEvent.TrySetResult((bId, path));
         });
 
-        await connection.StartAsync();
-        await connection.InvokeAsync("SubscribeToBucket", bucketId);
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+        await connection.InvokeAsync("SubscribeToBucket", bucketId, TestContext.Current.CancellationToken);
 
         // Delete the file
-        var deleteResp = await admin.DeleteAsync($"/api/buckets/{bucketId}/files/delete-me.txt");
+        var deleteResp = await admin.DeleteAsync($"/api/buckets/{bucketId}/files/delete-me.txt", TestContext.Current.CancellationToken);
         deleteResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Wait for the event
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000));
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive FileDeleted event within 5 seconds");
 
         var (eventBucketId, eventPath) = receivedEvent.Task.Result;
         eventBucketId.Should().Be(bucketId);
         eventPath.Should().Be("delete-me.txt");
 
-        await connection.StopAsync();
+        await connection.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -188,14 +188,14 @@ public class FileHubTests : IClassFixture<TestFixture>
         var hubUrl = _fixture.GetServerUrl() + "/hub/files";
         await using var connection = CreateHubConnection(hubUrl);
 
-        await connection.StartAsync();
+        await connection.StartAsync(TestContext.Current.CancellationToken);
 
         // SubscribeToAll without auth token should throw
-        var act = () => connection.InvokeAsync("SubscribeToAll");
+        var act = () => connection.InvokeAsync("SubscribeToAll", TestContext.Current.CancellationToken);
         await act.Should().ThrowAsync<HubException>()
             .WithMessage("*Admin authentication required*");
 
-        await connection.StopAsync();
+        await connection.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -211,22 +211,22 @@ public class FileHubTests : IClassFixture<TestFixture>
             receivedEvent.TrySetResult(bucket);
         });
 
-        await connection.StartAsync();
-        await connection.InvokeAsync("SubscribeToAll");
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+        await connection.InvokeAsync("SubscribeToAll", TestContext.Current.CancellationToken);
 
         // Create a bucket
         using var admin = _fixture.CreateAdminClient();
-        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "global-notify-test" });
+        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "global-notify-test" }, TestContext.Current.CancellationToken);
         createResp.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Wait for the event
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000));
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive BucketCreated event within 5 seconds");
 
         var eventBucket = receivedEvent.Task.Result;
         eventBucket.GetProperty("name").GetString().Should().Be("global-notify-test");
 
-        await connection.StopAsync();
+        await connection.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -247,30 +247,30 @@ public class FileHubTests : IClassFixture<TestFixture>
             firstEventReceived.TrySetResult(true);
         });
 
-        await connection.StartAsync();
-        await connection.InvokeAsync("SubscribeToBucket", bucketId);
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+        await connection.InvokeAsync("SubscribeToBucket", bucketId, TestContext.Current.CancellationToken);
 
         // Upload first file (should receive)
         var uploadResp1 = await UploadFileAsync(admin, bucketId, "file1.txt", "content 1");
         uploadResp1.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Wait for the first event
-        var completed = await Task.WhenAny(firstEventReceived.Task, Task.Delay(5000));
+        var completed = await Task.WhenAny(firstEventReceived.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completed.Should().Be(firstEventReceived.Task, "Should receive first FileCreated event");
         receivedEvents.Should().HaveCount(1);
 
         // Unsubscribe
-        await connection.InvokeAsync("UnsubscribeFromBucket", bucketId);
+        await connection.InvokeAsync("UnsubscribeFromBucket", bucketId, TestContext.Current.CancellationToken);
 
         // Upload second file (should NOT receive)
         var uploadResp2 = await UploadFileAsync(admin, bucketId, "file2.txt", "content 2");
         uploadResp2.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Wait a bit and verify no new event
-        await Task.Delay(1000);
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
         receivedEvents.Should().HaveCount(1);
 
-        await connection.StopAsync();
+        await connection.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -289,20 +289,20 @@ public class FileHubTests : IClassFixture<TestFixture>
             receivedEvent.TrySetResult(bucketIdReceived);
         });
 
-        await connection.StartAsync();
-        await connection.InvokeAsync("SubscribeToBucket", bucketId);
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+        await connection.InvokeAsync("SubscribeToBucket", bucketId, TestContext.Current.CancellationToken);
 
         // Delete the bucket
-        var deleteResp = await admin.DeleteAsync($"/api/buckets/{bucketId}");
+        var deleteResp = await admin.DeleteAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         deleteResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Wait for the event
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000));
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive BucketDeleted event within 5 seconds");
 
         receivedEvent.Task.Result.Should().Be(bucketId);
 
-        await connection.StopAsync();
+        await connection.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -321,22 +321,22 @@ public class FileHubTests : IClassFixture<TestFixture>
             receivedEvent.TrySetResult((bId, changes));
         });
 
-        await connection.StartAsync();
-        await connection.InvokeAsync("SubscribeToBucket", bucketId);
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+        await connection.InvokeAsync("SubscribeToBucket", bucketId, TestContext.Current.CancellationToken);
 
         // Update the bucket
         var updateResp = await admin.PatchAsJsonAsync($"/api/buckets/{bucketId}",
-            new { name = "updated-signalr-test" });
+            new { name = "updated-signalr-test" }, TestContext.Current.CancellationToken);
         updateResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Wait for the event
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000));
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
         completedTask.Should().Be(receivedEvent.Task, "Should receive BucketUpdated event within 5 seconds");
 
         var (eventBucketId, eventChanges) = receivedEvent.Task.Result;
         eventBucketId.Should().Be(bucketId);
         eventChanges.GetProperty("name").GetString().Should().Be("updated-signalr-test");
 
-        await connection.StopAsync();
+        await connection.StopAsync(TestContext.Current.CancellationToken);
     }
 }

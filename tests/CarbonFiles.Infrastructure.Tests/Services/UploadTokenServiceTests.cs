@@ -135,7 +135,7 @@ public class UploadTokenServiceTests : IDisposable
 
         var result = await _sut.CreateAsync("bucket0007", request, auth);
 
-        var entity = await _db.UploadTokens.FirstOrDefaultAsync(t => t.Token == result.Token);
+        var entity = await _db.UploadTokens.FirstOrDefaultAsync(t => t.Token == result.Token, TestContext.Current.CancellationToken);
         entity.Should().NotBeNull();
         entity!.BucketId.Should().Be("bucket0007");
         entity.MaxUploads.Should().Be(10);
@@ -166,7 +166,7 @@ public class UploadTokenServiceTests : IDisposable
             ExpiresAt = DateTime.UtcNow.AddDays(1),
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var (bucketId, isValid) = await _sut.ValidateAsync("cfu_validtoken00000000000000000000000000000000000000");
 
@@ -185,7 +185,7 @@ public class UploadTokenServiceTests : IDisposable
             ExpiresAt = DateTime.UtcNow.AddDays(-1), // expired
             CreatedAt = DateTime.UtcNow.AddDays(-2)
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var (bucketId, isValid) = await _sut.ValidateAsync("cfu_expiredtoken000000000000000000000000000000000000");
 
@@ -214,7 +214,7 @@ public class UploadTokenServiceTests : IDisposable
             UploadsUsed = 3, // reached max
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var (_, isValid) = await _sut.ValidateAsync("cfu_maxedtoken000000000000000000000000000000000000000");
 
@@ -234,7 +234,7 @@ public class UploadTokenServiceTests : IDisposable
             UploadsUsed = 2,
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var (bucketId, isValid) = await _sut.ValidateAsync("cfu_partialtoken00000000000000000000000000000000000");
 
@@ -255,7 +255,7 @@ public class UploadTokenServiceTests : IDisposable
             UploadsUsed = 100, // lots of uploads, but no limit
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var (_, isValid) = await _sut.ValidateAsync("cfu_nolimittoken0000000000000000000000000000000000");
 
@@ -276,14 +276,14 @@ public class UploadTokenServiceTests : IDisposable
             UploadsUsed = 0,
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         await _sut.IncrementUsageAsync("cfu_inctoken0000000000000000000000000000000000000000", 3);
 
         // Need to reload to see the change from ExecuteUpdate
         var entity = await _db.UploadTokens
             .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Token == "cfu_inctoken0000000000000000000000000000000000000000");
+            .FirstOrDefaultAsync(t => t.Token == "cfu_inctoken0000000000000000000000000000000000000000", TestContext.Current.CancellationToken);
         entity!.UploadsUsed.Should().Be(3);
     }
 
@@ -299,13 +299,13 @@ public class UploadTokenServiceTests : IDisposable
             UploadsUsed = 5,
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         await _sut.IncrementUsageAsync("cfu_accumtoken000000000000000000000000000000000000000", 2);
 
         var entity = await _db.UploadTokens
             .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Token == "cfu_accumtoken000000000000000000000000000000000000000");
+            .FirstOrDefaultAsync(t => t.Token == "cfu_accumtoken000000000000000000000000000000000000000", TestContext.Current.CancellationToken);
         entity!.UploadsUsed.Should().Be(7);
     }
 
@@ -321,6 +321,6 @@ public class UploadTokenServiceTests : IDisposable
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(7)
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 }

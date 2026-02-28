@@ -23,15 +23,15 @@ public class HealthEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetHealth_ReturnsOk()
     {
-        var response = await _client.GetAsync("/healthz");
+        var response = await _client.GetAsync("/healthz", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task GetHealth_ReturnsHealthyStatus()
     {
-        var response = await _client.GetAsync("/healthz");
-        var json = await response.Content.ReadAsStringAsync();
+        var response = await _client.GetAsync("/healthz", TestContext.Current.CancellationToken);
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var health = JsonSerializer.Deserialize<HealthResponse>(json, SnakeCaseOptions);
 
         health.Should().NotBeNull();
@@ -43,8 +43,8 @@ public class HealthEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetHealth_ReturnsSnakeCaseJson()
     {
-        var response = await _client.GetAsync("/healthz");
-        var json = await response.Content.ReadAsStringAsync();
+        var response = await _client.GetAsync("/healthz", TestContext.Current.CancellationToken);
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         json.Should().Contain("\"status\"");
         json.Should().Contain("\"uptime_seconds\"");
         json.Should().Contain("\"db\"");

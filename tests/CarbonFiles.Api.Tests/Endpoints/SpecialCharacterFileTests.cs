@@ -29,9 +29,9 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
     {
         var c = client ?? _fixture.CreateAdminClient();
         var bucketName = name ?? $"special-char-test-{Guid.NewGuid():N}";
-        var response = await c.PostAsJsonAsync("/api/buckets", new { name = bucketName });
+        var response = await c.PostAsJsonAsync("/api/buckets", new { name = bucketName }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetProperty("id").GetString()!;
     }
@@ -48,7 +48,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
     private static async Task<JsonElement> ParseJsonAsync(HttpResponseMessage response)
     {
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         return JsonDocument.Parse(json).RootElement;
     }
 
@@ -59,7 +59,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         HttpClient client, string bucketId, string fileName, string content)
     {
         using var multipart = CreateMultipartContent("file", fileName, content);
-        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", multipart);
+        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", multipart, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created,
             $"Upload should succeed for filename '{fileName}'");
         var body = await ParseJsonAsync(response);
@@ -77,7 +77,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
         var encodedFilename = Uri.EscapeDataString(fileName);
         var response = await client.PutAsync(
-            $"/api/buckets/{bucketId}/upload/stream?filename={encodedFilename}", byteContent);
+            $"/api/buckets/{bucketId}/upload/stream?filename={encodedFilename}", byteContent, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created,
             $"Stream upload should succeed for filename '{fileName}'");
         var body = await ParseJsonAsync(response);
@@ -128,7 +128,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         // We need to URL-encode the path for the HTTP request
         var encodedPath = Uri.EscapeDataString(expectedPath);
         var metaResponse = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files/{encodedPath}");
+            $"/api/buckets/{bucketId}/files/{encodedPath}", TestContext.Current.CancellationToken);
         metaResponse.StatusCode.Should().Be(HttpStatusCode.OK,
             $"Metadata GET should return 200 for '{fileName}' (encoded as '{encodedPath}')");
 
@@ -142,17 +142,17 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
         // ── Step 3: Download content ──
         var downloadResponse = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files/{encodedPath}/content");
+            $"/api/buckets/{bucketId}/files/{encodedPath}/content", TestContext.Current.CancellationToken);
         downloadResponse.StatusCode.Should().Be(HttpStatusCode.OK,
             $"Content download should return 200 for '{fileName}'");
 
-        var downloadedContent = await downloadResponse.Content.ReadAsStringAsync();
+        var downloadedContent = await downloadResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         downloadedContent.Should().Be(fileContent,
             $"Downloaded content should match uploaded content for '{fileName}'");
 
         // ── Step 4: List files ──
         var listResponse = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files");
+            $"/api/buckets/{bucketId}/files", TestContext.Current.CancellationToken);
         listResponse.StatusCode.Should().Be(HttpStatusCode.OK,
             $"File listing should return 200 for '{fileName}'");
 
@@ -178,7 +178,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
         // ── Step 5: Short URL resolves ──
         using var noRedirectClient = _fixture.CreateNoRedirectClient();
-        var shortUrlResponse = await noRedirectClient.GetAsync($"/s/{shortCode}");
+        var shortUrlResponse = await noRedirectClient.GetAsync($"/s/{shortCode}", TestContext.Current.CancellationToken);
         shortUrlResponse.StatusCode.Should().Be(HttpStatusCode.Redirect,
             $"Short URL should redirect (302) for '{fileName}'");
 
@@ -193,13 +193,13 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
         // ── Step 6: Delete ──
         var deleteResponse = await client.DeleteAsync(
-            $"/api/buckets/{bucketId}/files/{encodedPath}");
+            $"/api/buckets/{bucketId}/files/{encodedPath}", TestContext.Current.CancellationToken);
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.NoContent,
             $"Delete should return 204 for '{fileName}'");
 
         // Verify it's gone
         var afterDeleteResponse = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files/{encodedPath}");
+            $"/api/buckets/{bucketId}/files/{encodedPath}", TestContext.Current.CancellationToken);
         afterDeleteResponse.StatusCode.Should().Be(HttpStatusCode.NotFound,
             $"File should be gone after delete for '{fileName}'");
     }
@@ -404,10 +404,10 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         // Verify content can be downloaded
         var encodedPath = Uri.EscapeDataString(expectedPath);
         var downloadResponse = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files/{encodedPath}/content");
+            $"/api/buckets/{bucketId}/files/{encodedPath}/content", TestContext.Current.CancellationToken);
         downloadResponse.StatusCode.Should().Be(HttpStatusCode.OK,
             "Content should be downloadable for stream-uploaded emoji file");
-        var content = await downloadResponse.Content.ReadAsStringAsync();
+        var content = await downloadResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         content.Should().Be(fileContent);
     }
 
@@ -428,9 +428,9 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         // Verify content
         var encodedPath = Uri.EscapeDataString(expectedPath);
         var downloadResponse = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files/{encodedPath}/content");
+            $"/api/buckets/{bucketId}/files/{encodedPath}/content", TestContext.Current.CancellationToken);
         downloadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        var content = await downloadResponse.Content.ReadAsStringAsync();
+        var content = await downloadResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         content.Should().Be(fileContent);
     }
 
@@ -450,9 +450,9 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
         var encodedPath = Uri.EscapeDataString(expectedPath);
         var downloadResponse = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files/{encodedPath}/content");
+            $"/api/buckets/{bucketId}/files/{encodedPath}/content", TestContext.Current.CancellationToken);
         downloadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        var content = await downloadResponse.Content.ReadAsStringAsync();
+        var content = await downloadResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         content.Should().Be(fileContent);
     }
 
@@ -469,7 +469,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         // When field name is not in the generic set, it is used as the path
         var fieldName = "docs/r\u00E9sum\u00E9.pdf";
         using var content = CreateMultipartContent(fieldName, "ignored.txt", "custom field content");
-        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", content);
+        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", content, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created,
             "Upload with special char field name should succeed");
@@ -489,7 +489,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
         var fieldName = "\U0001f4c1data/report.txt";
         using var content = CreateMultipartContent(fieldName, "ignored.txt", "emoji field content");
-        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", content);
+        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", content, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created,
             "Upload with emoji field name should succeed");
@@ -525,7 +525,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
             totalSize += Encoding.UTF8.GetByteCount(content);
         }
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}");
+        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -548,10 +548,10 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         await UploadFileAsync(client, bucketId, "\U0001f389party.txt", "party content");
         await UploadFileAsync(client, bucketId, "normal.txt", "normal content");
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip");
+        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var zipStream = await response.Content.ReadAsStreamAsync();
+        using var zipStream = await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken);
         using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
         archive.Entries.Should().HaveCount(2);
 
@@ -571,10 +571,10 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         var expectedContent = "Contenu fran\u00E7ais";
         await UploadFileAsync(client, bucketId, "donn\u00E9es.csv", expectedContent);
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip");
+        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var zipStream = await response.Content.ReadAsStreamAsync();
+        using var zipStream = await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken);
         using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
         archive.Entries.Should().HaveCount(1);
 
@@ -583,7 +583,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
             "ZIP entry should have the unicode filename (lowercased)");
 
         using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
-        var actualContent = await reader.ReadToEndAsync();
+        var actualContent = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
         actualContent.Should().Be(expectedContent,
             "ZIP entry content should match the uploaded content");
     }
@@ -596,10 +596,10 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
         await UploadFileAsync(client, bucketId, "my file.txt", "spaces content");
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip");
+        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var zipStream = await response.Content.ReadAsStreamAsync();
+        using var zipStream = await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken);
         using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
         archive.Entries.Should().HaveCount(1);
 
@@ -615,10 +615,10 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
         await UploadFileAsync(client, bucketId, "file+plus.txt", "plus content");
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip");
+        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var zipStream = await response.Content.ReadAsStreamAsync();
+        using var zipStream = await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken);
         using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
         archive.Entries.Should().HaveCount(1);
 
@@ -646,10 +646,10 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
             await UploadFileAsync(client, bucketId, name, $"content for {name}");
         }
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip");
+        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var zipStream = await response.Content.ReadAsStreamAsync();
+        using var zipStream = await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken);
         using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
         archive.Entries.Should().HaveCount(fileNames.Length,
             "ZIP should contain all uploaded files");
@@ -679,11 +679,11 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         var shortCode = uploaded.GetProperty("short_code").GetString()!;
 
         // Follow the short URL redirect to get content
-        var contentResponse = await _fixture.Client.GetAsync($"/s/{shortCode}");
+        var contentResponse = await _fixture.Client.GetAsync($"/s/{shortCode}", TestContext.Current.CancellationToken);
         contentResponse.StatusCode.Should().Be(HttpStatusCode.OK,
             "Following the short URL redirect should serve the file content");
 
-        var downloadedContent = await contentResponse.Content.ReadAsStringAsync();
+        var downloadedContent = await contentResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         downloadedContent.Should().Be(fileContent,
             "Short URL should serve the correct content for emoji filename");
     }
@@ -699,11 +699,11 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         var uploaded = await UploadFileAsync(client, bucketId, fileName, fileContent);
         var shortCode = uploaded.GetProperty("short_code").GetString()!;
 
-        var contentResponse = await _fixture.Client.GetAsync($"/s/{shortCode}");
+        var contentResponse = await _fixture.Client.GetAsync($"/s/{shortCode}", TestContext.Current.CancellationToken);
         contentResponse.StatusCode.Should().Be(HttpStatusCode.OK,
             "Following the short URL redirect should serve the file content");
 
-        var downloadedContent = await contentResponse.Content.ReadAsStringAsync();
+        var downloadedContent = await contentResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         downloadedContent.Should().Be(fileContent,
             "Short URL should serve the correct content for unicode filename");
     }
@@ -738,8 +738,8 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         // Verify new content is served
         var encodedPath = Uri.EscapeDataString(fileName.ToLowerInvariant());
         var downloadResponse = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files/{encodedPath}/content");
-        var content = await downloadResponse.Content.ReadAsStringAsync();
+            $"/api/buckets/{bucketId}/files/{encodedPath}/content", TestContext.Current.CancellationToken);
+        var content = await downloadResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         content.Should().Be("version 2 is longer",
             "Downloaded content should be the latest version for emoji filename");
     }
@@ -759,7 +759,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
         var encodedPath = Uri.EscapeDataString(fileName.ToLowerInvariant());
         var response = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files/{encodedPath}/content?download=true");
+            $"/api/buckets/{bucketId}/files/{encodedPath}/content?download=true", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK,
             "Download with ?download=true should work for emoji filename");
 
@@ -787,7 +787,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
 
         var encodedPath = Uri.EscapeDataString(fileName.ToLowerInvariant());
         var response = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files/{encodedPath}/content?download=true");
+            $"/api/buckets/{bucketId}/files/{encodedPath}/content?download=true", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK,
             "Download with ?download=true should work for unicode filename");
 
@@ -824,7 +824,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         }
 
         var response = await _fixture.Client.GetAsync(
-            $"/api/buckets/{bucketId}/files?limit=50");
+            $"/api/buckets/{bucketId}/files?limit=50", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -863,7 +863,7 @@ public class SpecialCharacterFileTests : IClassFixture<TestFixture>
         var encodedPath = Uri.EscapeDataString(fileName.ToLowerInvariant());
         var request = new HttpRequestMessage(HttpMethod.Head,
             $"/api/buckets/{bucketId}/files/{encodedPath}/content");
-        var response = await _fixture.Client.SendAsync(request);
+        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK,
             "HEAD request should work for emoji filename");

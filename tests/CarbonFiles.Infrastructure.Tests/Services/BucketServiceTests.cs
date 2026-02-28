@@ -143,7 +143,7 @@ public class BucketServiceTests : IDisposable
 
         var result = await _sut.CreateAsync(request, auth);
 
-        var entity = await _db.Buckets.FindAsync(result.Id);
+        var entity = await _db.Buckets.FindAsync(new object[] { result.Id }, TestContext.Current.CancellationToken);
         entity.Should().NotBeNull();
         entity!.Name.Should().Be("stored");
         entity.Description.Should().Be("desc");
@@ -158,7 +158,7 @@ public class BucketServiceTests : IDisposable
 
         var result = await _sut.CreateAsync(request, auth);
 
-        var entity = await _db.Buckets.FindAsync(result.Id);
+        var entity = await _db.Buckets.FindAsync(new object[] { result.Id }, TestContext.Current.CancellationToken);
         entity!.OwnerKeyPrefix.Should().Be("cf4_aabbccdd");
     }
 
@@ -207,7 +207,7 @@ public class BucketServiceTests : IDisposable
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(7)
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Admin();
         var result = await _sut.ListAsync(new PaginationParams(), auth, includeExpired: false);
@@ -235,7 +235,7 @@ public class BucketServiceTests : IDisposable
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(7)
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Admin();
         var result = await _sut.ListAsync(new PaginationParams(), auth, includeExpired: true);
@@ -279,7 +279,7 @@ public class BucketServiceTests : IDisposable
         _db.Buckets.Add(new BucketEntity { Id = "size00001", Name = "small", Owner = "admin", CreatedAt = DateTime.UtcNow, TotalSize = 100 });
         _db.Buckets.Add(new BucketEntity { Id = "size00002", Name = "big", Owner = "admin", CreatedAt = DateTime.UtcNow, TotalSize = 10000 });
         _db.Buckets.Add(new BucketEntity { Id = "size00003", Name = "medium", Owner = "admin", CreatedAt = DateTime.UtcNow, TotalSize = 1000 });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Admin();
         var result = await _sut.ListAsync(
@@ -315,7 +315,7 @@ public class BucketServiceTests : IDisposable
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await _sut.GetByIdAsync("get0000001");
 
@@ -345,7 +345,7 @@ public class BucketServiceTests : IDisposable
             CreatedAt = DateTime.UtcNow.AddDays(-10),
             ExpiresAt = DateTime.UtcNow.AddDays(-1)
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await _sut.GetByIdAsync("expired010");
         result.Should().BeNull();
@@ -375,7 +375,7 @@ public class BucketServiceTests : IDisposable
                 UpdatedAt = DateTime.UtcNow
             });
         }
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await _sut.GetByIdAsync("many000001");
 
@@ -396,7 +396,7 @@ public class BucketServiceTests : IDisposable
             Owner = "admin",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Admin();
         var result = await _sut.UpdateAsync("upd0000001",
@@ -416,7 +416,7 @@ public class BucketServiceTests : IDisposable
             Owner = "admin",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Admin();
         var result = await _sut.UpdateAsync("upd0000002",
@@ -437,7 +437,7 @@ public class BucketServiceTests : IDisposable
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(1)
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Admin();
         var result = await _sut.UpdateAsync("upd0000003",
@@ -467,7 +467,7 @@ public class BucketServiceTests : IDisposable
             Owner = "alice",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Owner("bob", "cf4_bob12345");
         var result = await _sut.UpdateAsync("upd0000004",
@@ -486,7 +486,7 @@ public class BucketServiceTests : IDisposable
             Owner = "alice",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Owner("alice", "cf4_alice123");
         var result = await _sut.UpdateAsync("upd0000005",
@@ -532,7 +532,7 @@ public class BucketServiceTests : IDisposable
             ExpiresAt = DateTime.UtcNow.AddDays(1),
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Create the bucket directory
         Directory.CreateDirectory(Path.Combine(_tempDir, "del0000001"));
@@ -542,10 +542,10 @@ public class BucketServiceTests : IDisposable
 
         result.Should().BeTrue();
 
-        (await _db.Buckets.FindAsync("del0000001")).Should().BeNull();
-        (await _db.Files.AnyAsync(f => f.BucketId == "del0000001")).Should().BeFalse();
-        (await _db.ShortUrls.AnyAsync(s => s.BucketId == "del0000001")).Should().BeFalse();
-        (await _db.UploadTokens.AnyAsync(t => t.BucketId == "del0000001")).Should().BeFalse();
+        (await _db.Buckets.FindAsync(new object[] { "del0000001" }, TestContext.Current.CancellationToken)).Should().BeNull();
+        (await _db.Files.AnyAsync(f => f.BucketId == "del0000001", TestContext.Current.CancellationToken)).Should().BeFalse();
+        (await _db.ShortUrls.AnyAsync(s => s.BucketId == "del0000001", TestContext.Current.CancellationToken)).Should().BeFalse();
+        (await _db.UploadTokens.AnyAsync(t => t.BucketId == "del0000001", TestContext.Current.CancellationToken)).Should().BeFalse();
         Directory.Exists(Path.Combine(_tempDir, "del0000001")).Should().BeFalse();
     }
 
@@ -568,14 +568,14 @@ public class BucketServiceTests : IDisposable
             Owner = "alice",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Owner("bob", "cf4_bob12345");
         var result = await _sut.DeleteAsync("del0000002", auth);
 
         result.Should().BeFalse();
         // Bucket should still exist
-        (await _db.Buckets.FindAsync("del0000002")).Should().NotBeNull();
+        (await _db.Buckets.FindAsync(new object[] { "del0000002" }, TestContext.Current.CancellationToken)).Should().NotBeNull();
     }
 
     [Fact]
@@ -588,13 +588,13 @@ public class BucketServiceTests : IDisposable
             Owner = "alice",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Owner("alice", "cf4_alice123");
         var result = await _sut.DeleteAsync("del0000003", auth);
 
         result.Should().BeTrue();
-        (await _db.Buckets.FindAsync("del0000003")).Should().BeNull();
+        (await _db.Buckets.FindAsync(new object[] { "del0000003" }, TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     // ── GetSummaryAsync ─────────────────────────────────────────────────
@@ -632,7 +632,7 @@ public class BucketServiceTests : IDisposable
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await _sut.GetSummaryAsync("sum0000001");
 
@@ -659,7 +659,7 @@ public class BucketServiceTests : IDisposable
             FileCount = 0,
             TotalSize = 0
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await _sut.GetSummaryAsync("sum0000002");
 
@@ -684,7 +684,7 @@ public class BucketServiceTests : IDisposable
             CreatedAt = DateTime.UtcNow.AddDays(-10),
             ExpiresAt = DateTime.UtcNow.AddDays(-1)
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await _sut.GetSummaryAsync("sum0000003");
         result.Should().BeNull();
@@ -724,6 +724,6 @@ public class BucketServiceTests : IDisposable
             ExpiresAt = DateTime.UtcNow.AddDays(7),
             TotalSize = 300
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 }

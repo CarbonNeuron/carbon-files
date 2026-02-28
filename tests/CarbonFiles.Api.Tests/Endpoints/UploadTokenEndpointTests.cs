@@ -19,18 +19,18 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
     private async Task<string> CreateBucketAsync(HttpClient? client = null)
     {
         var c = client ?? _fixture.CreateAdminClient();
-        var response = await c.PostAsJsonAsync("/api/buckets", new { name = $"token-test-{Guid.NewGuid():N}" });
+        var response = await c.PostAsJsonAsync("/api/buckets", new { name = $"token-test-{Guid.NewGuid():N}" }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetProperty("id").GetString()!;
     }
 
     private async Task<string> CreateUploadTokenAsync(HttpClient client, string bucketId, object? request = null)
     {
-        var response = await client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", request ?? new { });
+        var response = await client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", request ?? new { }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetProperty("token").GetString()!;
     }
@@ -46,7 +46,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
 
     private static async Task<JsonElement> ParseJsonAsync(HttpResponseMessage response)
     {
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         return JsonDocument.Parse(json).RootElement;
     }
 
@@ -58,7 +58,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
-        var response = await client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { });
+        var response = await client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -78,7 +78,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
-        var response = await client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { max_uploads = 10 });
+        var response = await client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { max_uploads = 10 }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -92,7 +92,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
-        var response = await client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { expires_in = "1h" });
+        var response = await client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { expires_in = "1h" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -107,7 +107,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         using var adminClient = _fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(adminClient);
 
-        var response = await _fixture.Client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { });
+        var response = await _fixture.Client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -117,7 +117,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
     {
         using var client = _fixture.CreateAdminClient();
 
-        var response = await client.PostAsJsonAsync("/api/buckets/nonexist01/tokens", new { });
+        var response = await client.PostAsJsonAsync("/api/buckets/nonexist01/tokens", new { }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -128,7 +128,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         using var admin = _fixture.CreateAdminClient();
 
         // Create an API key
-        var keyResp = await admin.PostAsJsonAsync("/api/keys", new { name = "token-creator" });
+        var keyResp = await admin.PostAsJsonAsync("/api/keys", new { name = "token-creator" }, TestContext.Current.CancellationToken);
         keyResp.StatusCode.Should().Be(HttpStatusCode.Created);
         var keyBody = await ParseJsonAsync(keyResp);
         var apiKey = keyBody.GetProperty("key").GetString()!;
@@ -136,13 +136,13 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         using var apiClient = _fixture.CreateAuthenticatedClient(apiKey);
 
         // Create a bucket with this key
-        var bucketResp = await apiClient.PostAsJsonAsync("/api/buckets", new { name = "key-token-test" });
+        var bucketResp = await apiClient.PostAsJsonAsync("/api/buckets", new { name = "key-token-test" }, TestContext.Current.CancellationToken);
         bucketResp.StatusCode.Should().Be(HttpStatusCode.Created);
         var bucketBody = await ParseJsonAsync(bucketResp);
         var bucketId = bucketBody.GetProperty("id").GetString()!;
 
         // Create token with the API key
-        var response = await apiClient.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { });
+        var response = await apiClient.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -156,7 +156,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         using var client = _fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
-        var response = await client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { expires_in = "invalid" });
+        var response = await client.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { expires_in = "invalid" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -172,7 +172,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
 
         // Upload without any auth header (public client), just with token param
         using var content = CreateMultipartContent("file", "token-upload.txt", "uploaded via token");
-        var response = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", content);
+        var response = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", content, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -192,7 +192,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
         var response = await _fixture.Client.PutAsync(
-            $"/api/buckets/{bucketId}/upload/stream?filename=stream-token.txt&token={token}", content);
+            $"/api/buckets/{bucketId}/upload/stream?filename=stream-token.txt&token={token}", content, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -209,12 +209,12 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
 
         // First upload should succeed
         using var content1 = CreateMultipartContent("file", "first.txt", "first upload");
-        var response1 = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", content1);
+        var response1 = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", content1, TestContext.Current.CancellationToken);
         response1.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Second upload should be rejected
         using var content2 = CreateMultipartContent("file", "second.txt", "second upload");
-        var response2 = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", content2);
+        var response2 = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", content2, TestContext.Current.CancellationToken);
         response2.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -228,7 +228,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
 
         // Try to use token on a different bucket
         using var content = CreateMultipartContent("file", "wrong-bucket.txt", "should fail");
-        var response = await _fixture.Client.PostAsync($"/api/buckets/{bucketId2}/upload?token={token}", content);
+        var response = await _fixture.Client.PostAsync($"/api/buckets/{bucketId2}/upload?token={token}", content, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -241,7 +241,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
 
         using var content = CreateMultipartContent("file", "test.txt", "test");
         var response = await _fixture.Client.PostAsync(
-            $"/api/buckets/{bucketId}/upload?token=cfu_invalidtoken00000000000000000000000000000000", content);
+            $"/api/buckets/{bucketId}/upload?token=cfu_invalidtoken00000000000000000000000000000000", content, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -255,7 +255,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         // Create a token with very short expiry (15 minutes is the shortest preset)
         // We can't easily test actual expiry in integration tests without waiting,
         // so we verify that the token response has the correct expiry set
-        var response = await admin.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { expires_in = "15m" });
+        var response = await admin.PostAsJsonAsync($"/api/buckets/{bucketId}/tokens", new { expires_in = "15m" }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
         var body = await ParseJsonAsync(response);
@@ -274,14 +274,14 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         var content1 = new ByteArrayContent(Encoding.UTF8.GetBytes("first stream"));
         content1.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         var response1 = await _fixture.Client.PutAsync(
-            $"/api/buckets/{bucketId}/upload/stream?filename=first.txt&token={token}", content1);
+            $"/api/buckets/{bucketId}/upload/stream?filename=first.txt&token={token}", content1, TestContext.Current.CancellationToken);
         response1.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Second stream upload should be rejected
         var content2 = new ByteArrayContent(Encoding.UTF8.GetBytes("second stream"));
         content2.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         var response2 = await _fixture.Client.PutAsync(
-            $"/api/buckets/{bucketId}/upload/stream?filename=second.txt&token={token}", content2);
+            $"/api/buckets/{bucketId}/upload/stream?filename=second.txt&token={token}", content2, TestContext.Current.CancellationToken);
         response2.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -296,7 +296,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         var content = new ByteArrayContent(Encoding.UTF8.GetBytes("wrong bucket"));
         content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         var response = await _fixture.Client.PutAsync(
-            $"/api/buckets/{bucketId2}/upload/stream?filename=test.txt&token={token}", content);
+            $"/api/buckets/{bucketId2}/upload/stream?filename=test.txt&token={token}", content, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -317,7 +317,7 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         file2.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         multipart.Add(file2, "file", "two.txt");
 
-        var response1 = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", multipart);
+        var response1 = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", multipart, TestContext.Current.CancellationToken);
         response1.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Now try uploading 2 more files (should fail because we already used 2 of 3)
@@ -332,12 +332,12 @@ public class UploadTokenEndpointTests : IClassFixture<TestFixture>
         // This should succeed (uploads_used=2, max=3, and we're uploading 2 more)
         // But at the validation stage, 2 < 3 so the upload proceeds, then usage becomes 4
         // The validation only checks if current usage < max, not future usage
-        var response2 = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", multipart2);
+        var response2 = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", multipart2, TestContext.Current.CancellationToken);
         response2.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Now one more upload should be rejected (usage is now 4 >= max 3)
         using var content5 = CreateMultipartContent("file", "five.txt", "file five");
-        var response3 = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", content5);
+        var response3 = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload?token={token}", content5, TestContext.Current.CancellationToken);
         response3.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 }

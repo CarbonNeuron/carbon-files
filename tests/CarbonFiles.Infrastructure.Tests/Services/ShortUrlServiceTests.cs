@@ -43,7 +43,7 @@ public class ShortUrlServiceTests : IDisposable
 
         code.Should().HaveLength(6);
 
-        var entity = await _db.ShortUrls.FirstOrDefaultAsync(s => s.Code == code);
+        var entity = await _db.ShortUrls.FirstOrDefaultAsync(s => s.Code == code, TestContext.Current.CancellationToken);
         entity.Should().NotBeNull();
         entity!.BucketId.Should().Be("bucket0001");
         entity.FilePath.Should().Be("test.txt");
@@ -63,7 +63,7 @@ public class ShortUrlServiceTests : IDisposable
             FilePath = "hello.txt",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var url = await _sut.ResolveAsync("abc123");
 
@@ -88,7 +88,7 @@ public class ShortUrlServiceTests : IDisposable
             FilePath = "file.txt",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var url = await _sut.ResolveAsync("exp123");
 
@@ -114,7 +114,7 @@ public class ShortUrlServiceTests : IDisposable
             FilePath = "orphan.txt",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var url = await _sut.ResolveAsync("orphan1");
 
@@ -134,13 +134,13 @@ public class ShortUrlServiceTests : IDisposable
             FilePath = "file.txt",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Admin();
         var result = await _sut.DeleteAsync("del123", auth);
 
         result.Should().BeTrue();
-        (await _db.ShortUrls.FindAsync("del123")).Should().BeNull();
+        (await _db.ShortUrls.FindAsync(new object[] { "del123" }, TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Fact]
@@ -161,14 +161,14 @@ public class ShortUrlServiceTests : IDisposable
             FilePath = "file.txt",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Owner("bob", "cf4_bob12345");
         var result = await _sut.DeleteAsync("own123", auth);
 
         result.Should().BeFalse();
         // Short URL should still exist
-        (await _db.ShortUrls.FindAsync("own123")).Should().NotBeNull();
+        (await _db.ShortUrls.FindAsync(new object[] { "own123" }, TestContext.Current.CancellationToken)).Should().NotBeNull();
     }
 
     [Fact]
@@ -189,13 +189,13 @@ public class ShortUrlServiceTests : IDisposable
             FilePath = "file.txt",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Owner("alice", "cf4_alice123");
         var result = await _sut.DeleteAsync("own456", auth);
 
         result.Should().BeTrue();
-        (await _db.ShortUrls.FindAsync("own456")).Should().BeNull();
+        (await _db.ShortUrls.FindAsync(new object[] { "own456" }, TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Fact]
@@ -218,7 +218,7 @@ public class ShortUrlServiceTests : IDisposable
             FilePath = "orphan.txt",
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var auth = AuthContext.Admin();
         var result = await _sut.DeleteAsync("orphn2", auth);
@@ -238,6 +238,6 @@ public class ShortUrlServiceTests : IDisposable
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(7)
         });
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 }

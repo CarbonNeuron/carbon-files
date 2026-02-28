@@ -17,10 +17,10 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     private async Task<(HttpClient Client, string ApiKey, string Prefix, string Name)> CreateApiKeyClientAsync(string name = "test-agent")
     {
         using var admin = _fixture.CreateAdminClient();
-        var response = await admin.PostAsJsonAsync("/api/keys", new { name });
+        var response = await admin.PostAsJsonAsync("/api/keys", new { name }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         var apiKey = doc.RootElement.GetProperty("key").GetString()!;
         var prefix = doc.RootElement.GetProperty("prefix").GetString()!;
@@ -31,7 +31,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
 
     private static async Task<JsonElement> ParseJsonAsync(HttpResponseMessage response)
     {
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         return JsonDocument.Parse(json).RootElement;
     }
 
@@ -41,7 +41,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     public async Task CreateBucket_AsAdmin_Returns201()
     {
         using var client = _fixture.CreateAdminClient();
-        var response = await client.PostAsJsonAsync("/api/buckets", new { name = "admin-bucket", description = "test" });
+        var response = await client.PostAsJsonAsync("/api/buckets", new { name = "admin-bucket", description = "test" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -60,7 +60,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
         var (client, _, _, name) = await CreateApiKeyClientAsync("bucket-creator");
         using (client)
         {
-            var response = await client.PostAsJsonAsync("/api/buckets", new { name = "key-bucket" });
+            var response = await client.PostAsJsonAsync("/api/buckets", new { name = "key-bucket" }, TestContext.Current.CancellationToken);
 
             response.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -73,7 +73,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task CreateBucket_Public_Returns403()
     {
-        var response = await _fixture.Client.PostAsJsonAsync("/api/buckets", new { name = "public-bucket" });
+        var response = await _fixture.Client.PostAsJsonAsync("/api/buckets", new { name = "public-bucket" }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -81,7 +81,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     public async Task CreateBucket_MissingName_Returns400()
     {
         using var client = _fixture.CreateAdminClient();
-        var response = await client.PostAsJsonAsync("/api/buckets", new { name = "" });
+        var response = await client.PostAsJsonAsync("/api/buckets", new { name = "" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var body = await ParseJsonAsync(response);
@@ -92,7 +92,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     public async Task CreateBucket_InvalidExpiry_Returns400()
     {
         using var client = _fixture.CreateAdminClient();
-        var response = await client.PostAsJsonAsync("/api/buckets", new { name = "bad-expiry", expires_in = "invalid" });
+        var response = await client.PostAsJsonAsync("/api/buckets", new { name = "bad-expiry", expires_in = "invalid" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -101,7 +101,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     public async Task CreateBucket_NeverExpiry_HasNullExpiresAt()
     {
         using var client = _fixture.CreateAdminClient();
-        var response = await client.PostAsJsonAsync("/api/buckets", new { name = "no-expiry", expires_in = "never" });
+        var response = await client.PostAsJsonAsync("/api/buckets", new { name = "no-expiry", expires_in = "never" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -119,9 +119,9 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
         using var admin = _fixture.CreateAdminClient();
 
         // Create a bucket
-        await admin.PostAsJsonAsync("/api/buckets", new { name = "list-all-test" });
+        await admin.PostAsJsonAsync("/api/buckets", new { name = "list-all-test" }, TestContext.Current.CancellationToken);
 
-        var response = await admin.GetAsync("/api/buckets");
+        var response = await admin.GetAsync("/api/buckets", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -142,14 +142,14 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
         using (client2)
         {
             // Create a bucket with each key
-            var r1 = await client1.PostAsJsonAsync("/api/buckets", new { name = "bucket-a" });
+            var r1 = await client1.PostAsJsonAsync("/api/buckets", new { name = "bucket-a" }, TestContext.Current.CancellationToken);
             r1.StatusCode.Should().Be(HttpStatusCode.Created);
 
-            var r2 = await client2.PostAsJsonAsync("/api/buckets", new { name = "bucket-b" });
+            var r2 = await client2.PostAsJsonAsync("/api/buckets", new { name = "bucket-b" }, TestContext.Current.CancellationToken);
             r2.StatusCode.Should().Be(HttpStatusCode.Created);
 
             // List as owner-a: should only see bucket-a
-            var listA = await client1.GetAsync("/api/buckets");
+            var listA = await client1.GetAsync("/api/buckets", TestContext.Current.CancellationToken);
             var bodyA = await ParseJsonAsync(listA);
             var itemsA = bodyA.GetProperty("items");
 
@@ -157,7 +157,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
                 item.GetProperty("owner").GetString().Should().Be("owner-a");
 
             // List as owner-b: should only see bucket-b
-            var listB = await client2.GetAsync("/api/buckets");
+            var listB = await client2.GetAsync("/api/buckets", TestContext.Current.CancellationToken);
             var bodyB = await ParseJsonAsync(listB);
             var itemsB = bodyB.GetProperty("items");
 
@@ -169,7 +169,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ListBuckets_Public_Returns403()
     {
-        var response = await _fixture.Client.GetAsync("/api/buckets");
+        var response = await _fixture.Client.GetAsync("/api/buckets", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -180,9 +180,9 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
 
         // Create several buckets
         for (int i = 0; i < 3; i++)
-            await admin.PostAsJsonAsync("/api/buckets", new { name = $"paginate-{i}" });
+            await admin.PostAsJsonAsync("/api/buckets", new { name = $"paginate-{i}" }, TestContext.Current.CancellationToken);
 
-        var response = await admin.GetAsync("/api/buckets?limit=1&offset=0");
+        var response = await admin.GetAsync("/api/buckets?limit=1&offset=0", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -199,13 +199,13 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
 
         // Create a bucket that expires immediately (15 minutes is the smallest preset)
         // We'll create one with "never" to ensure it shows up
-        var neverResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "never-expires-list" , expires_in = "never" });
+        var neverResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "never-expires-list" , expires_in = "never" }, TestContext.Current.CancellationToken);
         neverResp.StatusCode.Should().Be(HttpStatusCode.Created);
         var neverBody = await ParseJsonAsync(neverResp);
         var neverId = neverBody.GetProperty("id").GetString()!;
 
         // List should include the never-expiring bucket
-        var listResp = await admin.GetAsync("/api/buckets");
+        var listResp = await admin.GetAsync("/api/buckets", TestContext.Current.CancellationToken);
         var listBody = await ParseJsonAsync(listResp);
         var ids = new List<string>();
         foreach (var item in listBody.GetProperty("items").EnumerateArray())
@@ -220,7 +220,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
         using var admin = _fixture.CreateAdminClient();
 
         // Just verify the query parameter is accepted
-        var response = await admin.GetAsync("/api/buckets?include_expired=true");
+        var response = await admin.GetAsync("/api/buckets?include_expired=true", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -234,11 +234,11 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     {
         using var admin = _fixture.CreateAdminClient();
 
-        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "get-test" });
+        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "get-test" }, TestContext.Current.CancellationToken);
         var createBody = await ParseJsonAsync(createResp);
         var bucketId = createBody.GetProperty("id").GetString()!;
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}");
+        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -252,19 +252,19 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     public async Task GetBucket_PublicCanAccess()
     {
         using var admin = _fixture.CreateAdminClient();
-        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "public-get" });
+        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "public-get" }, TestContext.Current.CancellationToken);
         var createBody = await ParseJsonAsync(createResp);
         var bucketId = createBody.GetProperty("id").GetString()!;
 
         // Access without auth
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}");
+        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task GetBucket_NotFound_Returns404()
     {
-        var response = await _fixture.Client.GetAsync("/api/buckets/nonexistent");
+        var response = await _fixture.Client.GetAsync("/api/buckets/nonexistent", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -277,7 +277,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
         // in tests, but we can verify the logic by creating one with "never" which should work
         // For expired testing we rely on unit tests since we can control the DB directly
         // Here just verify that a missing bucket returns 404
-        var response = await _fixture.Client.GetAsync("/api/buckets/expired0000");
+        var response = await _fixture.Client.GetAsync("/api/buckets/expired0000", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -289,12 +289,12 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
         var (client, _, _, _) = await CreateApiKeyClientAsync("updater");
         using (client)
         {
-            var createResp = await client.PostAsJsonAsync("/api/buckets", new { name = "to-update" });
+            var createResp = await client.PostAsJsonAsync("/api/buckets", new { name = "to-update" }, TestContext.Current.CancellationToken);
             var createBody = await ParseJsonAsync(createResp);
             var bucketId = createBody.GetProperty("id").GetString()!;
 
             var updateResp = await client.PatchAsJsonAsync($"/api/buckets/{bucketId}",
-                new { name = "updated-name", description = "new desc" });
+                new { name = "updated-name", description = "new desc" }, TestContext.Current.CancellationToken);
             updateResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
             var body = await ParseJsonAsync(updateResp);
@@ -309,14 +309,14 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
         var (client, _, _, _) = await CreateApiKeyClientAsync("update-owner");
         using (client)
         {
-            var createResp = await client.PostAsJsonAsync("/api/buckets", new { name = "admin-will-update" });
+            var createResp = await client.PostAsJsonAsync("/api/buckets", new { name = "admin-will-update" }, TestContext.Current.CancellationToken);
             var createBody = await ParseJsonAsync(createResp);
             var bucketId = createBody.GetProperty("id").GetString()!;
 
             // Admin updates it
             using var admin = _fixture.CreateAdminClient();
             var updateResp = await admin.PatchAsJsonAsync($"/api/buckets/{bucketId}",
-                new { name = "admin-updated" });
+                new { name = "admin-updated" }, TestContext.Current.CancellationToken);
             updateResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
             var body = await ParseJsonAsync(updateResp);
@@ -328,12 +328,12 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     public async Task UpdateBucket_Public_Returns403()
     {
         using var admin = _fixture.CreateAdminClient();
-        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "no-public-update" });
+        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "no-public-update" }, TestContext.Current.CancellationToken);
         var createBody = await ParseJsonAsync(createResp);
         var bucketId = createBody.GetProperty("id").GetString()!;
 
         var updateResp = await _fixture.Client.PatchAsJsonAsync($"/api/buckets/{bucketId}",
-            new { name = "hacked" });
+            new { name = "hacked" }, TestContext.Current.CancellationToken);
         updateResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -346,13 +346,13 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
         using (owner)
         using (other)
         {
-            var createResp = await owner.PostAsJsonAsync("/api/buckets", new { name = "owned-bucket" });
+            var createResp = await owner.PostAsJsonAsync("/api/buckets", new { name = "owned-bucket" }, TestContext.Current.CancellationToken);
             var createBody = await ParseJsonAsync(createResp);
             var bucketId = createBody.GetProperty("id").GetString()!;
 
             // Other API key tries to update
             var updateResp = await other.PatchAsJsonAsync($"/api/buckets/{bucketId}",
-                new { name = "stolen" });
+                new { name = "stolen" }, TestContext.Current.CancellationToken);
             updateResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         }
     }
@@ -361,11 +361,11 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     public async Task UpdateBucket_NoFields_Returns400()
     {
         using var admin = _fixture.CreateAdminClient();
-        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "no-fields" });
+        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "no-fields" }, TestContext.Current.CancellationToken);
         var createBody = await ParseJsonAsync(createResp);
         var bucketId = createBody.GetProperty("id").GetString()!;
 
-        var updateResp = await admin.PatchAsJsonAsync($"/api/buckets/{bucketId}", new { });
+        var updateResp = await admin.PatchAsJsonAsync($"/api/buckets/{bucketId}", new { }, TestContext.Current.CancellationToken);
         updateResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -375,12 +375,12 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
         var (client, _, _, _) = await CreateApiKeyClientAsync("expiry-updater");
         using (client)
         {
-            var createResp = await client.PostAsJsonAsync("/api/buckets", new { name = "expiry-update" });
+            var createResp = await client.PostAsJsonAsync("/api/buckets", new { name = "expiry-update" }, TestContext.Current.CancellationToken);
             var createBody = await ParseJsonAsync(createResp);
             var bucketId = createBody.GetProperty("id").GetString()!;
 
             var updateResp = await client.PatchAsJsonAsync($"/api/buckets/{bucketId}",
-                new { expires_in = "never" });
+                new { expires_in = "never" }, TestContext.Current.CancellationToken);
             updateResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
             var body = await ParseJsonAsync(updateResp);
@@ -398,15 +398,15 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
         var (client, _, _, _) = await CreateApiKeyClientAsync("deleter");
         using (client)
         {
-            var createResp = await client.PostAsJsonAsync("/api/buckets", new { name = "to-delete" });
+            var createResp = await client.PostAsJsonAsync("/api/buckets", new { name = "to-delete" }, TestContext.Current.CancellationToken);
             var createBody = await ParseJsonAsync(createResp);
             var bucketId = createBody.GetProperty("id").GetString()!;
 
-            var deleteResp = await client.DeleteAsync($"/api/buckets/{bucketId}");
+            var deleteResp = await client.DeleteAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
             deleteResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
             // Verify it's gone
-            var getResp = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}");
+            var getResp = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
             getResp.StatusCode.Should().Be(HttpStatusCode.NotFound);
         }
     }
@@ -416,11 +416,11 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     {
         using var admin = _fixture.CreateAdminClient();
 
-        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "admin-delete" });
+        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "admin-delete" }, TestContext.Current.CancellationToken);
         var createBody = await ParseJsonAsync(createResp);
         var bucketId = createBody.GetProperty("id").GetString()!;
 
-        var deleteResp = await admin.DeleteAsync($"/api/buckets/{bucketId}");
+        var deleteResp = await admin.DeleteAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         deleteResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
@@ -429,11 +429,11 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     {
         using var admin = _fixture.CreateAdminClient();
 
-        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "no-public-delete" });
+        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "no-public-delete" }, TestContext.Current.CancellationToken);
         var createBody = await ParseJsonAsync(createResp);
         var bucketId = createBody.GetProperty("id").GetString()!;
 
-        var deleteResp = await _fixture.Client.DeleteAsync($"/api/buckets/{bucketId}");
+        var deleteResp = await _fixture.Client.DeleteAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         deleteResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -441,7 +441,7 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     public async Task DeleteBucket_NotFound_Returns404()
     {
         using var admin = _fixture.CreateAdminClient();
-        var response = await admin.DeleteAsync("/api/buckets/nonexistent");
+        var response = await admin.DeleteAsync("/api/buckets/nonexistent", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -452,15 +452,15 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     {
         using var admin = _fixture.CreateAdminClient();
 
-        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "summary-test" });
+        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "summary-test" }, TestContext.Current.CancellationToken);
         var createBody = await ParseJsonAsync(createResp);
         var bucketId = createBody.GetProperty("id").GetString()!;
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/summary");
+        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/summary", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.Should().Be("text/plain");
 
-        var text = await response.Content.ReadAsStringAsync();
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         text.Should().Contain("Bucket: summary-test");
         text.Should().Contain("Owner:");
         text.Should().Contain("Files:");
@@ -473,18 +473,18 @@ public class BucketEndpointTests : IClassFixture<TestFixture>
     {
         using var admin = _fixture.CreateAdminClient();
 
-        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "public-summary" });
+        var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "public-summary" }, TestContext.Current.CancellationToken);
         var createBody = await ParseJsonAsync(createResp);
         var bucketId = createBody.GetProperty("id").GetString()!;
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/summary");
+        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/summary", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task GetSummary_NotFound_Returns404()
     {
-        var response = await _fixture.Client.GetAsync("/api/buckets/nonexistent/summary");
+        var response = await _fixture.Client.GetAsync("/api/buckets/nonexistent/summary", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }
