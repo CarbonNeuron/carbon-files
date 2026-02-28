@@ -1,7 +1,12 @@
+using System.IO.Compression;
 using CarbonFiles.Api.Auth;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
+using CarbonFiles.Infrastructure.Data;
+using CarbonFiles.Infrastructure.Services;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.EntityFrameworkCore;
 
 namespace CarbonFiles.Api.Endpoints;
 
@@ -116,6 +121,45 @@ public static class BucketEndpoints
             return result != null
                 ? Results.Text(result, "text/plain")
                 : Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
+        });
+
+        // GET|HEAD /api/buckets/{id}/zip — Download bucket as ZIP (public access)
+        group.MapMethods("/{id}/zip", new[] { "GET", "HEAD" }, async (string id, HttpContext ctx, CarbonFilesDbContext db, FileStorageService storage, ILogger<Program> logger) =>
+        {
+            var bucket = await db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
+            if (bucket == null || (bucket.ExpiresAt != null && bucket.ExpiresAt < DateTime.UtcNow))
+                return Results.Json(new ErrorResponse { Error = "Bucket not found" }, statusCode: 404);
+
+            // Log warning for large buckets
+            if (bucket.FileCount > 10000 || bucket.TotalSize > 10L * 1024 * 1024 * 1024)
+                logger.LogWarning("Large bucket ZIP requested: {BucketId} ({FileCount} files, {TotalSize} bytes)", id, bucket.FileCount, bucket.TotalSize);
+
+            var files = await db.Files.Where(f => f.BucketId == id).OrderBy(f => f.Path).ToListAsync();
+
+            ctx.Response.ContentType = "application/zip";
+            ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=\"{bucket.Name}.zip\"";
+
+            // HEAD request: return headers without body
+            if (HttpMethods.IsHead(ctx.Request.Method))
+                return Results.Empty;
+
+            // ZipArchive.Dispose writes the central directory synchronously,
+            // so we must allow synchronous IO on this request.
+            var syncIoFeature = ctx.Features.Get<IHttpBodyControlFeature>();
+            if (syncIoFeature != null)
+                syncIoFeature.AllowSynchronousIO = true;
+
+            using var archive = new ZipArchive(ctx.Response.Body, ZipArchiveMode.Create, leaveOpen: true);
+            foreach (var file in files)
+            {
+                var entry = archive.CreateEntry(file.Path, CompressionLevel.Fastest);
+                await using var entryStream = entry.Open();
+                await using var fileStream = storage.OpenRead(id, file.Path);
+                if (fileStream != null)
+                    await fileStream.CopyToAsync(entryStream);
+            }
+
+            return Results.Empty;
         });
     }
 }
