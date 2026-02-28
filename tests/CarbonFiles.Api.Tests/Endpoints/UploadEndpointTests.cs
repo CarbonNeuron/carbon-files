@@ -8,17 +8,14 @@ using Xunit;
 
 namespace CarbonFiles.Api.Tests.Endpoints;
 
-public class UploadEndpointTests : IClassFixture<TestFixture>
+public class UploadEndpointTests : IntegrationTestBase
 {
-    private readonly TestFixture _fixture;
-
-    public UploadEndpointTests(TestFixture fixture) => _fixture = fixture;
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private async Task<string> CreateBucketAsync(HttpClient? client = null)
     {
-        var c = client ?? _fixture.CreateAdminClient();
+        var c = client ?? Fixture.CreateAdminClient();
         var response = await c.PostAsJsonAsync("/api/buckets", new { name = $"upload-test-{Guid.NewGuid():N}" }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -46,7 +43,7 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task MultipartUpload_AsAdmin_Returns201WithFileInfo()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         using var content = CreateMultipartContent("file", "hello.txt", "Hello, World!");
@@ -72,7 +69,7 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task MultipartUpload_MultipleFiles_ReturnsAll()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var multipart = new MultipartFormDataContent();
@@ -96,7 +93,7 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task MultipartUpload_CustomFieldName_SetsPath()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         using var content = CreateMultipartContent("src/main.rs", "ignored.txt", "fn main() {}");
@@ -112,7 +109,7 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task MultipartUpload_GenericFieldName_UsesFileName()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         using var content = CreateMultipartContent("upload", "data.json", "{}");
@@ -128,11 +125,11 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task MultipartUpload_WithoutAuth_Returns403()
     {
-        using var adminClient = _fixture.CreateAdminClient();
+        using var adminClient = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(adminClient);
 
         using var content = CreateMultipartContent("file", "test.txt", "test");
-        var response = await _fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload", content, TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.PostAsync($"/api/buckets/{bucketId}/upload", content, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -140,7 +137,7 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task MultipartUpload_ReuploadSamePath_Overwrites()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         // Upload first version
@@ -167,7 +164,7 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task MultipartUpload_NonexistentBucket_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         using var content = CreateMultipartContent("file", "test.txt", "test");
         var response = await client.PostAsync("/api/buckets/nonexistent/upload", content, TestContext.Current.CancellationToken);
@@ -180,7 +177,7 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task StreamUpload_WithFilename_Returns201()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var content = new ByteArrayContent(Encoding.UTF8.GetBytes("stream content"));
@@ -200,7 +197,7 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task StreamUpload_MissingFilename_Returns400()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var content = new ByteArrayContent(Encoding.UTF8.GetBytes("test"));
@@ -212,11 +209,11 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task StreamUpload_WithoutAuth_Returns403()
     {
-        using var adminClient = _fixture.CreateAdminClient();
+        using var adminClient = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(adminClient);
 
         var content = new ByteArrayContent(Encoding.UTF8.GetBytes("test"));
-        var response = await _fixture.Client.PutAsync($"/api/buckets/{bucketId}/upload/stream?filename=test.txt", content, TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.PutAsync($"/api/buckets/{bucketId}/upload/stream?filename=test.txt", content, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -226,7 +223,7 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task MultipartUpload_WithApiKey_Works()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
 
         // Create an API key
         var keyResp = await admin.PostAsJsonAsync("/api/keys", new { name = "uploader" }, TestContext.Current.CancellationToken);
@@ -234,7 +231,7 @@ public class UploadEndpointTests : IClassFixture<TestFixture>
         var keyBody = await ParseJsonAsync(keyResp);
         var apiKey = keyBody.GetProperty("key").GetString()!;
 
-        using var apiClient = _fixture.CreateAuthenticatedClient(apiKey);
+        using var apiClient = Fixture.CreateAuthenticatedClient(apiKey);
 
         // Create a bucket with this key
         var bucketResp = await apiClient.PostAsJsonAsync("/api/buckets", new { name = "key-upload-test" }, TestContext.Current.CancellationToken);

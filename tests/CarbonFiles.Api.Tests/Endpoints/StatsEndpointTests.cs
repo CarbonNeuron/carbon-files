@@ -8,11 +8,8 @@ using Xunit;
 
 namespace CarbonFiles.Api.Tests.Endpoints;
 
-public class StatsEndpointTests : IClassFixture<TestFixture>
+public class StatsEndpointTests : IntegrationTestBase
 {
-    private readonly TestFixture _fixture;
-
-    public StatsEndpointTests(TestFixture fixture) => _fixture = fixture;
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -24,7 +21,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
 
     private async Task<(HttpClient Client, string ApiKey, string Prefix)> CreateApiKeyClientAsync(string name)
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var response = await admin.PostAsJsonAsync("/api/keys", new { name }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -33,7 +30,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
         var apiKey = doc.RootElement.GetProperty("key").GetString()!;
         var prefix = doc.RootElement.GetProperty("prefix").GetString()!;
 
-        var client = _fixture.CreateAuthenticatedClient(apiKey);
+        var client = Fixture.CreateAuthenticatedClient(apiKey);
         return (client, apiKey, prefix);
     }
 
@@ -62,7 +59,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetStats_AsAdmin_ReturnsStats()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
 
         // Create some data: API key, bucket, files
         var (apiClient, _, _) = await CreateApiKeyClientAsync("stats-agent");
@@ -88,7 +85,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetStats_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.GetAsync("/api/stats", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/api/stats", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -120,7 +117,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
             await UploadFileAsync(client2, bucketB, "b.txt", "owner b data here");
         }
 
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var response = await admin.GetAsync("/api/stats", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -149,7 +146,7 @@ public class StatsEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetStats_ReturnsSnakeCaseJson()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var response = await admin.GetAsync("/api/stats", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 

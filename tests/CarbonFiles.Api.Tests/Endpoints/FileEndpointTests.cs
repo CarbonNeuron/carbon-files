@@ -8,17 +8,14 @@ using Xunit;
 
 namespace CarbonFiles.Api.Tests.Endpoints;
 
-public class FileEndpointTests : IClassFixture<TestFixture>
+public class FileEndpointTests : IntegrationTestBase
 {
-    private readonly TestFixture _fixture;
-
-    public FileEndpointTests(TestFixture fixture) => _fixture = fixture;
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private async Task<string> CreateBucketAsync(HttpClient? client = null)
     {
-        var c = client ?? _fixture.CreateAdminClient();
+        var c = client ?? Fixture.CreateAdminClient();
         var response = await c.PostAsJsonAsync("/api/buckets", new { name = $"file-test-{Guid.NewGuid():N}" }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -52,10 +49,10 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ListFiles_EmptyBucket_ReturnsEmptyList()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -66,7 +63,7 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ListFiles_WithFiles_ReturnsPaginated()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         // Upload several files
@@ -75,7 +72,7 @@ public class FileEndpointTests : IClassFixture<TestFixture>
         await UploadFileAsync(client, bucketId, "file3.txt", "content3");
 
         // List with pagination
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files?limit=2&offset=0", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files?limit=2&offset=0", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -88,7 +85,7 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ListFiles_NonexistentBucket_Returns404()
     {
-        var response = await _fixture.Client.GetAsync("/api/buckets/nonexistent/files", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/api/buckets/nonexistent/files", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -97,12 +94,12 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetFileMetadata_ReturnsCorrectInfo()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "readme.md", "# Hello");
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/readme.md", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/readme.md", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -119,10 +116,10 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetFileMetadata_NonexistentFile_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/nonexistent.txt", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/nonexistent.txt", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -131,13 +128,13 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task DownloadFile_ReturnsContentWithCorrectHeaders()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var fileContent = "Hello, download world!";
         await UploadFileAsync(client, bucketId, "download.txt", fileContent);
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/download.txt/content", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/download.txt/content", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Check content
@@ -154,13 +151,13 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task DownloadFile_ETagConditionalRequest_Returns304()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "etag-test.txt", "etag content");
 
         // First request to get ETag
-        var response1 = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/etag-test.txt/content", TestContext.Current.CancellationToken);
+        var response1 = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/etag-test.txt/content", TestContext.Current.CancellationToken);
         response1.StatusCode.Should().Be(HttpStatusCode.OK);
         var etag = response1.Headers.ETag!.Tag;
 
@@ -168,14 +165,14 @@ public class FileEndpointTests : IClassFixture<TestFixture>
         var request = new HttpRequestMessage(HttpMethod.Get, $"/api/buckets/{bucketId}/files/etag-test.txt/content");
         request.Headers.IfNoneMatch.Add(new EntityTagHeaderValue(etag));
 
-        var response2 = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
+        var response2 = await Fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
         response2.StatusCode.Should().Be(HttpStatusCode.NotModified);
     }
 
     [Fact]
     public async Task DownloadFile_IfModifiedSince_Returns304()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "modified-test.txt", "modified content");
@@ -184,19 +181,19 @@ public class FileEndpointTests : IClassFixture<TestFixture>
         var request = new HttpRequestMessage(HttpMethod.Get, $"/api/buckets/{bucketId}/files/modified-test.txt/content");
         request.Headers.IfModifiedSince = DateTimeOffset.UtcNow.AddHours(1);
 
-        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotModified);
     }
 
     [Fact]
     public async Task DownloadFile_DownloadTrue_AddsContentDisposition()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "attachment.txt", "download me");
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/attachment.txt/content?download=true", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/attachment.txt/content?download=true", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         response.Content.Headers.ContentDisposition.Should().NotBeNull();
@@ -207,10 +204,10 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task DownloadFile_NonexistentFile_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/nonexistent.txt/content", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/nonexistent.txt/content", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -219,7 +216,7 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task DeleteFile_AsAdmin_Returns204()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "to-delete.txt", "delete me");
@@ -228,14 +225,14 @@ public class FileEndpointTests : IClassFixture<TestFixture>
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Verify it's gone
-        var getResponse = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/to-delete.txt", TestContext.Current.CancellationToken);
+        var getResponse = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/to-delete.txt", TestContext.Current.CancellationToken);
         getResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
     public async Task DeleteFile_AsOwner_Returns204()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
 
         // Create an API key and bucket
         var keyResp = await admin.PostAsJsonAsync("/api/keys", new { name = "file-deleter" }, TestContext.Current.CancellationToken);
@@ -243,7 +240,7 @@ public class FileEndpointTests : IClassFixture<TestFixture>
         var keyBody = await ParseJsonAsync(keyResp);
         var apiKey = keyBody.GetProperty("key").GetString()!;
 
-        using var ownerClient = _fixture.CreateAuthenticatedClient(apiKey);
+        using var ownerClient = Fixture.CreateAuthenticatedClient(apiKey);
 
         var bucketResp = await ownerClient.PostAsJsonAsync("/api/buckets", new { name = "delete-test" }, TestContext.Current.CancellationToken);
         var bucketBody = await ParseJsonAsync(bucketResp);
@@ -258,19 +255,19 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task DeleteFile_AsPublic_Returns403()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "no-delete.txt", "protected");
 
-        var response = await _fixture.Client.DeleteAsync($"/api/buckets/{bucketId}/files/no-delete.txt", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.DeleteAsync($"/api/buckets/{bucketId}/files/no-delete.txt", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
     public async Task DeleteFile_Nonexistent_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var response = await client.DeleteAsync($"/api/buckets/{bucketId}/files/nonexistent.txt", TestContext.Current.CancellationToken);
@@ -282,14 +279,14 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Upload_UpdatesBucketStats()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "stat1.txt", "12345");
         await UploadFileAsync(client, bucketId, "stat2.txt", "67890");
 
         // Check bucket detail shows correct stats
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await ParseJsonAsync(response);
@@ -300,13 +297,13 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Delete_UpdatesBucketStats()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "del-stat.txt", "12345");
 
         // Verify file count is 1
-        var response1 = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
+        var response1 = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         var body1 = await ParseJsonAsync(response1);
         body1.GetProperty("file_count").GetInt32().Should().Be(1);
 
@@ -314,7 +311,7 @@ public class FileEndpointTests : IClassFixture<TestFixture>
         await client.DeleteAsync($"/api/buckets/{bucketId}/files/del-stat.txt", TestContext.Current.CancellationToken);
 
         // Verify file count is 0
-        var response2 = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
+        var response2 = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         var body2 = await ParseJsonAsync(response2);
         body2.GetProperty("file_count").GetInt32().Should().Be(0);
         body2.GetProperty("total_size").GetInt64().Should().Be(0);
@@ -325,7 +322,7 @@ public class FileEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Upload_DetectsMimeType()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var files = new Dictionary<string, string>

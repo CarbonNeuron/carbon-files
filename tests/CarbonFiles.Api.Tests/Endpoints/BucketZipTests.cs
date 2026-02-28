@@ -9,17 +9,14 @@ using Xunit;
 
 namespace CarbonFiles.Api.Tests.Endpoints;
 
-public class BucketZipTests : IClassFixture<TestFixture>
+public class BucketZipTests : IntegrationTestBase
 {
-    private readonly TestFixture _fixture;
-
-    public BucketZipTests(TestFixture fixture) => _fixture = fixture;
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private async Task<string> CreateBucketAsync(string name = "zip-test")
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var response = await admin.PostAsJsonAsync("/api/buckets", new { name }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -29,7 +26,7 @@ public class BucketZipTests : IClassFixture<TestFixture>
 
     private async Task UploadFileAsync(string bucketId, string fileName, string content)
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var multipart = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(content));
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
@@ -47,7 +44,7 @@ public class BucketZipTests : IClassFixture<TestFixture>
         await UploadFileAsync(bucketId, "hello.txt", "Hello, World!");
         await UploadFileAsync(bucketId, "readme.md", "# README");
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -66,7 +63,7 @@ public class BucketZipTests : IClassFixture<TestFixture>
         var bucketId = await CreateBucketAsync("zip-headers");
         await UploadFileAsync(bucketId, "file.txt", "content");
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.Should().Be("application/zip");
@@ -77,7 +74,7 @@ public class BucketZipTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ZipDownload_NonexistentBucket_Returns404()
     {
-        var response = await _fixture.Client.GetAsync("/api/buckets/nonexistent/zip", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/api/buckets/nonexistent/zip", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -86,7 +83,7 @@ public class BucketZipTests : IClassFixture<TestFixture>
     {
         // We can't easily expire a bucket in integration tests since the minimum is 15m,
         // but we verify a non-existent bucket returns 404 which exercises the same code path.
-        var response = await _fixture.Client.GetAsync("/api/buckets/expired0000/zip", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/api/buckets/expired0000/zip", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -95,7 +92,7 @@ public class BucketZipTests : IClassFixture<TestFixture>
     {
         var bucketId = await CreateBucketAsync("zip-empty");
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.Should().Be("application/zip");
@@ -112,7 +109,7 @@ public class BucketZipTests : IClassFixture<TestFixture>
         var expectedContent = "This is the exact file content for verification.";
         await UploadFileAsync(bucketId, "verify.txt", expectedContent);
 
-        var response = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -135,7 +132,7 @@ public class BucketZipTests : IClassFixture<TestFixture>
         await UploadFileAsync(bucketId, "file.txt", "content");
 
         var request = new HttpRequestMessage(HttpMethod.Head, $"/api/buckets/{bucketId}/zip");
-        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.Should().Be("application/zip");

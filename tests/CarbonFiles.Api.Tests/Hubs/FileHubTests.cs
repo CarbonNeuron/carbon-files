@@ -9,11 +9,8 @@ using Xunit;
 
 namespace CarbonFiles.Api.Tests.Hubs;
 
-public class FileHubTests : IClassFixture<TestFixture>
+public class FileHubTests : IntegrationTestBase
 {
-    private readonly TestFixture _fixture;
-
-    public FileHubTests(TestFixture fixture) => _fixture = fixture;
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -45,7 +42,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         return new HubConnectionBuilder()
             .WithUrl(hubUrl, options =>
             {
-                options.HttpMessageHandlerFactory = _ => _fixture.GetHandler();
+                options.HttpMessageHandlerFactory = _ => Fixture.GetHandler();
             })
             .Build();
     }
@@ -55,7 +52,7 @@ public class FileHubTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Hub_Negotiate_ReturnsOk()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         // The negotiate endpoint should be reachable
         var response = await client.PostAsync("/hub/files/negotiate?negotiateVersion=1", null, TestContext.Current.CancellationToken);
@@ -73,10 +70,10 @@ public class FileHubTests : IClassFixture<TestFixture>
     [Fact]
     public async Task UploadFile_SubscribedToBucket_ReceivesFileCreatedEvent()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(admin, "signalr-upload-test");
 
-        var hubUrl = _fixture.GetServerUrl() + "/hub/files";
+        var hubUrl = Fixture.GetServerUrl() + "/hub/files";
         await using var connection = CreateHubConnection(hubUrl);
 
         var receivedEvent = new TaskCompletionSource<(string BucketId, JsonElement File)>();
@@ -107,7 +104,7 @@ public class FileHubTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ReUploadFile_SubscribedToFile_ReceivesFileUpdatedEvent()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(admin, "signalr-reupload-test");
 
         // Upload initial file
@@ -115,7 +112,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         uploadResp1.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Connect and subscribe to file
-        var hubUrl = _fixture.GetServerUrl() + "/hub/files";
+        var hubUrl = Fixture.GetServerUrl() + "/hub/files";
         await using var connection = CreateHubConnection(hubUrl);
 
         var receivedEvent = new TaskCompletionSource<(string BucketId, JsonElement File)>();
@@ -146,7 +143,7 @@ public class FileHubTests : IClassFixture<TestFixture>
     [Fact]
     public async Task DeleteFile_SubscribedToBucket_ReceivesFileDeletedEvent()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(admin, "signalr-delete-test");
 
         // Upload a file first
@@ -154,7 +151,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         uploadResp.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Connect and subscribe
-        var hubUrl = _fixture.GetServerUrl() + "/hub/files";
+        var hubUrl = Fixture.GetServerUrl() + "/hub/files";
         await using var connection = CreateHubConnection(hubUrl);
 
         var receivedEvent = new TaskCompletionSource<(string BucketId, string Path)>();
@@ -185,7 +182,7 @@ public class FileHubTests : IClassFixture<TestFixture>
     [Fact]
     public async Task SubscribeToAll_WithoutAdminAuth_ThrowsHubException()
     {
-        var hubUrl = _fixture.GetServerUrl() + "/hub/files";
+        var hubUrl = Fixture.GetServerUrl() + "/hub/files";
         await using var connection = CreateHubConnection(hubUrl);
 
         await connection.StartAsync(TestContext.Current.CancellationToken);
@@ -201,7 +198,7 @@ public class FileHubTests : IClassFixture<TestFixture>
     [Fact]
     public async Task SubscribeToAll_WithAdminToken_ReceivesBucketCreatedEvent()
     {
-        var hubUrl = _fixture.GetServerUrl() + "/hub/files?access_token=test-admin-key";
+        var hubUrl = Fixture.GetServerUrl() + "/hub/files?access_token=test-admin-key";
         await using var connection = CreateHubConnection(hubUrl);
 
         var receivedEvent = new TaskCompletionSource<JsonElement>();
@@ -215,7 +212,7 @@ public class FileHubTests : IClassFixture<TestFixture>
         await connection.InvokeAsync("SubscribeToAll", TestContext.Current.CancellationToken);
 
         // Create a bucket
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var createResp = await admin.PostAsJsonAsync("/api/buckets", new { name = "global-notify-test" }, TestContext.Current.CancellationToken);
         createResp.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -232,10 +229,10 @@ public class FileHubTests : IClassFixture<TestFixture>
     [Fact]
     public async Task UnsubscribeFromBucket_StopsReceivingEvents()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(admin, "signalr-unsub-test");
 
-        var hubUrl = _fixture.GetServerUrl() + "/hub/files";
+        var hubUrl = Fixture.GetServerUrl() + "/hub/files";
         await using var connection = CreateHubConnection(hubUrl);
 
         var receivedEvents = new List<string>();
@@ -276,10 +273,10 @@ public class FileHubTests : IClassFixture<TestFixture>
     [Fact]
     public async Task BucketDeleted_SubscribedToBucket_ReceivesBucketDeletedEvent()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(admin, "signalr-bucket-delete-test");
 
-        var hubUrl = _fixture.GetServerUrl() + "/hub/files";
+        var hubUrl = Fixture.GetServerUrl() + "/hub/files";
         await using var connection = CreateHubConnection(hubUrl);
 
         var receivedEvent = new TaskCompletionSource<string>();
@@ -308,10 +305,10 @@ public class FileHubTests : IClassFixture<TestFixture>
     [Fact]
     public async Task BucketUpdated_SubscribedToBucket_ReceivesBucketUpdatedEvent()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(admin, "signalr-bucket-update-test");
 
-        var hubUrl = _fixture.GetServerUrl() + "/hub/files";
+        var hubUrl = Fixture.GetServerUrl() + "/hub/files";
         await using var connection = CreateHubConnection(hubUrl);
 
         var receivedEvent = new TaskCompletionSource<(string BucketId, JsonElement Changes)>();

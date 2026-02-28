@@ -6,31 +6,26 @@ using Xunit;
 
 namespace CarbonFiles.Api.Tests.Endpoints;
 
-public class HealthEndpointTests : IClassFixture<TestFixture>
+public class HealthEndpointTests : IntegrationTestBase
 {
     private static readonly JsonSerializerOptions SnakeCaseOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
-    private readonly HttpClient _client;
-
-    public HealthEndpointTests(TestFixture fixture)
-    {
-        _client = fixture.Client;
-    }
+    private HttpClient Client => Fixture.Client;
 
     [Fact]
     public async Task GetHealth_ReturnsOk()
     {
-        var response = await _client.GetAsync("/healthz", TestContext.Current.CancellationToken);
+        var response = await Client.GetAsync("/healthz", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task GetHealth_ReturnsHealthyStatus()
     {
-        var response = await _client.GetAsync("/healthz", TestContext.Current.CancellationToken);
+        var response = await Client.GetAsync("/healthz", TestContext.Current.CancellationToken);
         var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var health = JsonSerializer.Deserialize<HealthResponse>(json, SnakeCaseOptions);
 
@@ -43,7 +38,7 @@ public class HealthEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetHealth_ReturnsSnakeCaseJson()
     {
-        var response = await _client.GetAsync("/healthz", TestContext.Current.CancellationToken);
+        var response = await Client.GetAsync("/healthz", TestContext.Current.CancellationToken);
         var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         json.Should().Contain("\"status\"");
         json.Should().Contain("\"uptime_seconds\"");

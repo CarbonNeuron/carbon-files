@@ -16,20 +16,17 @@ namespace CarbonFiles.Api.Tests;
 /// Each test verifies: correct status code, response deserializes,
 /// snake_case naming is used, and no null/missing required fields.
 /// </summary>
-public class AotSmokeTests : IClassFixture<TestFixture>
+public class AotSmokeTests : IntegrationTestBase
 {
-    private readonly TestFixture _fixture;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
-    public AotSmokeTests(TestFixture fixture) => _fixture = fixture;
-
     [Fact]
     public async Task FullApiWorkflow_AllEndpoints_WorkCorrectly()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
 
         // === Health ===
         var healthResponse = await admin.GetAsync("/healthz", TestContext.Current.CancellationToken);
@@ -72,14 +69,14 @@ public class AotSmokeTests : IClassFixture<TestFixture>
         var dashboardToken = tokenDoc.RootElement.GetProperty("token").GetString()!;
 
         // Validate /me
-        using var dashClient = _fixture.CreateAuthenticatedClient(dashboardToken);
+        using var dashClient = Fixture.CreateAuthenticatedClient(dashboardToken);
         var meResponse = await dashClient.GetAsync("/api/tokens/dashboard/me", TestContext.Current.CancellationToken);
         meResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var meJson = await meResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         meJson.Should().Contain("\"scope\"").And.Contain("\"expires_at\"");
 
         // === Buckets (using API key) ===
-        using var keyClient = _fixture.CreateAuthenticatedClient(apiKey);
+        using var keyClient = Fixture.CreateAuthenticatedClient(apiKey);
 
         // Create bucket
         var createBucketResponse = await keyClient.PostAsJsonAsync("/api/buckets",
@@ -99,7 +96,7 @@ public class AotSmokeTests : IClassFixture<TestFixture>
         listBucketsJson.Should().Contain("\"items\"").And.Contain("\"total\"");
 
         // Get bucket detail (public)
-        var getBucketResponse = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
+        var getBucketResponse = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         getBucketResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var detailJson = await getBucketResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         detailJson.Should().Contain("\"files\"").And.Contain("\"has_more_files\"");
@@ -129,20 +126,20 @@ public class AotSmokeTests : IClassFixture<TestFixture>
 
         // === Files ===
         // List files
-        var listFilesResponse = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files", TestContext.Current.CancellationToken);
+        var listFilesResponse = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files", TestContext.Current.CancellationToken);
         listFilesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var listFilesJson = await listFilesResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         listFilesJson.Should().Contain("\"items\"").And.Contain("\"total\"");
 
         // Get file metadata
-        var metaResponse = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/hello.txt", TestContext.Current.CancellationToken);
+        var metaResponse = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/hello.txt", TestContext.Current.CancellationToken);
         metaResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var metaJson = await metaResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         metaJson.Should().Contain("\"path\"").And.Contain("\"name\"").And.Contain("\"mime_type\"")
             .And.Contain("\"short_code\"").And.Contain("\"created_at\"").And.Contain("\"updated_at\"");
 
         // Download content
-        var downloadResponse = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/hello.txt/content", TestContext.Current.CancellationToken);
+        var downloadResponse = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/hello.txt/content", TestContext.Current.CancellationToken);
         downloadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         downloadResponse.Headers.ETag.Should().NotBeNull();
         downloadResponse.Content.Headers.LastModified.Should().NotBeNull();
@@ -155,14 +152,14 @@ public class AotSmokeTests : IClassFixture<TestFixture>
         using var conditionalRequest = new HttpRequestMessage(HttpMethod.Get,
             $"/api/buckets/{bucketId}/files/hello.txt/content");
         conditionalRequest.Headers.IfNoneMatch.Add(new System.Net.Http.Headers.EntityTagHeaderValue(etag));
-        var conditionalResponse = await _fixture.Client.SendAsync(conditionalRequest, TestContext.Current.CancellationToken);
+        var conditionalResponse = await Fixture.Client.SendAsync(conditionalRequest, TestContext.Current.CancellationToken);
         conditionalResponse.StatusCode.Should().Be(HttpStatusCode.NotModified);
 
         // Range request (206)
         using var rangeRequest = new HttpRequestMessage(HttpMethod.Get,
             $"/api/buckets/{bucketId}/files/hello.txt/content");
         rangeRequest.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 4);
-        var rangeResponse = await _fixture.Client.SendAsync(rangeRequest, TestContext.Current.CancellationToken);
+        var rangeResponse = await Fixture.Client.SendAsync(rangeRequest, TestContext.Current.CancellationToken);
         rangeResponse.StatusCode.Should().Be(HttpStatusCode.PartialContent);
         var partial = await rangeResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         partial.Should().Be("hello");
@@ -170,7 +167,7 @@ public class AotSmokeTests : IClassFixture<TestFixture>
         // HEAD request
         using var headRequest = new HttpRequestMessage(HttpMethod.Head,
             $"/api/buckets/{bucketId}/files/hello.txt/content");
-        var headResponse = await _fixture.Client.SendAsync(headRequest, TestContext.Current.CancellationToken);
+        var headResponse = await Fixture.Client.SendAsync(headRequest, TestContext.Current.CancellationToken);
         headResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         headResponse.Content.Headers.ContentLength.Should().BeGreaterThan(0);
 
@@ -181,13 +178,13 @@ public class AotSmokeTests : IClassFixture<TestFixture>
         patchRequest.Headers.Add("X-Append", "true");
         patchRequest.Content = new ByteArrayContent(Encoding.UTF8.GetBytes("!"));
         patchRequest.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
-        var patchResponse = await _fixture.Client.SendAsync(patchRequest, TestContext.Current.CancellationToken);
+        var patchResponse = await Fixture.Client.SendAsync(patchRequest, TestContext.Current.CancellationToken);
         patchResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var patchJson = await patchResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         patchJson.Should().Contain("\"size\"");
 
         // Verify appended content
-        var verifyResponse = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/hello.txt/content", TestContext.Current.CancellationToken);
+        var verifyResponse = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/hello.txt/content", TestContext.Current.CancellationToken);
         var verifyContent = await verifyResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         verifyContent.Should().Be("hello world!");
 
@@ -197,7 +194,7 @@ public class AotSmokeTests : IClassFixture<TestFixture>
         var shortCode = metaDoc.RootElement.GetProperty("short_code").GetString()!;
 
         // Resolve short URL
-        using var noRedirect = _fixture.CreateNoRedirectClient();
+        using var noRedirect = Fixture.CreateNoRedirectClient();
         var shortResponse = await noRedirect.GetAsync($"/s/{shortCode}", TestContext.Current.CancellationToken);
         shortResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
@@ -216,7 +213,7 @@ public class AotSmokeTests : IClassFixture<TestFixture>
         // Use upload token (no auth header)
         using var tokenUpload = new MultipartFormDataContent();
         tokenUpload.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("via token")), "files", "token-file.txt");
-        var tokenUploadResponse = await _fixture.Client.PostAsync(
+        var tokenUploadResponse = await Fixture.Client.PostAsync(
             $"/api/buckets/{bucketId}/upload?token={uploadToken}", tokenUpload, TestContext.Current.CancellationToken);
         tokenUploadResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -229,12 +226,12 @@ public class AotSmokeTests : IClassFixture<TestFixture>
             .And.Contain("\"total_downloads\"").And.Contain("\"storage_by_owner\"");
 
         // === Bucket Summary ===
-        var summaryResponse = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/summary", TestContext.Current.CancellationToken);
+        var summaryResponse = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/summary", TestContext.Current.CancellationToken);
         summaryResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         summaryResponse.Content.Headers.ContentType!.MediaType.Should().Be("text/plain");
 
         // === ZIP Download ===
-        var zipResponse = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
+        var zipResponse = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/zip", TestContext.Current.CancellationToken);
         zipResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         zipResponse.Content.Headers.ContentType!.MediaType.Should().Be("application/zip");
 
@@ -261,10 +258,10 @@ public class AotSmokeTests : IClassFixture<TestFixture>
         deleteKeyResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // === Error responses also serialize correctly ===
-        var notFoundResponse = await _fixture.Client.GetAsync("/api/buckets/nonexistent", TestContext.Current.CancellationToken);
+        var notFoundResponse = await Fixture.Client.GetAsync("/api/buckets/nonexistent", TestContext.Current.CancellationToken);
         notFoundResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
-        var forbiddenResponse = await _fixture.Client.GetAsync("/api/stats", TestContext.Current.CancellationToken);
+        var forbiddenResponse = await Fixture.Client.GetAsync("/api/stats", TestContext.Current.CancellationToken);
         forbiddenResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         var errorJson = await forbiddenResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         errorJson.Should().Contain("\"error\"");
@@ -273,7 +270,7 @@ public class AotSmokeTests : IClassFixture<TestFixture>
     [Fact]
     public async Task OpenApi_Spec_IsAvailable()
     {
-        var response = await _fixture.Client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.Should().Contain("json");
         var spec = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -283,7 +280,7 @@ public class AotSmokeTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Scalar_UI_IsAvailable()
     {
-        var response = await _fixture.Client.GetAsync("/scalar/v1", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/scalar/v1", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -291,26 +288,26 @@ public class AotSmokeTests : IClassFixture<TestFixture>
     public async Task AllErrorResponses_UseSnakeCase()
     {
         // 400 - bad request
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var badRequest = await admin.PostAsJsonAsync("/api/keys", new { name = "" }, JsonOptions, TestContext.Current.CancellationToken);
         var badJson = await badRequest.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         if (badRequest.StatusCode == HttpStatusCode.BadRequest)
             badJson.Should().Contain("\"error\"");
 
         // 401 - no token on /me
-        var noAuth = await _fixture.Client.GetAsync("/api/tokens/dashboard/me", TestContext.Current.CancellationToken);
+        var noAuth = await Fixture.Client.GetAsync("/api/tokens/dashboard/me", TestContext.Current.CancellationToken);
         noAuth.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         var noAuthJson = await noAuth.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         noAuthJson.Should().Contain("\"error\"");
 
         // 403 - non-admin on admin endpoint
-        var forbidden = await _fixture.Client.GetAsync("/api/keys", TestContext.Current.CancellationToken);
+        var forbidden = await Fixture.Client.GetAsync("/api/keys", TestContext.Current.CancellationToken);
         forbidden.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         var forbiddenJson = await forbidden.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         forbiddenJson.Should().Contain("\"error\"");
 
         // 404 - nonexistent bucket
-        var notFound = await _fixture.Client.GetAsync("/api/buckets/doesnotexist", TestContext.Current.CancellationToken);
+        var notFound = await Fixture.Client.GetAsync("/api/buckets/doesnotexist", TestContext.Current.CancellationToken);
         notFound.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

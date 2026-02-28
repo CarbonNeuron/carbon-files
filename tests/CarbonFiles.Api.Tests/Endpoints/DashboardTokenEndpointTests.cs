@@ -6,18 +6,15 @@ using Xunit;
 
 namespace CarbonFiles.Api.Tests.Endpoints;
 
-public class DashboardTokenEndpointTests : IClassFixture<TestFixture>
+public class DashboardTokenEndpointTests : IntegrationTestBase
 {
-    private readonly TestFixture _fixture;
-
-    public DashboardTokenEndpointTests(TestFixture fixture) => _fixture = fixture;
 
     // ── Create ──────────────────────────────────────────────────────────
 
     [Fact]
     public async Task CreateToken_AsAdmin_Returns201WithTokenAndExpiresAt()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var response = await client.PostAsJsonAsync("/api/tokens/dashboard", new { }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -36,7 +33,7 @@ public class DashboardTokenEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task CreateToken_WithCustomExpiry_Returns201()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var response = await client.PostAsJsonAsync("/api/tokens/dashboard", new { expires_in = "6h" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -51,7 +48,7 @@ public class DashboardTokenEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task CreateToken_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.PostAsJsonAsync("/api/tokens/dashboard", new { }, TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.PostAsJsonAsync("/api/tokens/dashboard", new { }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
         var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -61,7 +58,7 @@ public class DashboardTokenEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task CreateToken_ExceedsCap_Returns400()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         // "3d" is a valid ExpiryParser preset (3 days) that exceeds the 24h cap
         var response = await client.PostAsJsonAsync("/api/tokens/dashboard", new { expires_in = "3d" }, TestContext.Current.CancellationToken);
 
@@ -74,7 +71,7 @@ public class DashboardTokenEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task CreateToken_InvalidFormat_Returns400()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         // "2d" is not a valid ExpiryParser preset
         var response = await client.PostAsJsonAsync("/api/tokens/dashboard", new { expires_in = "2d" }, TestContext.Current.CancellationToken);
 
@@ -89,7 +86,7 @@ public class DashboardTokenEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task CreatedToken_CanAccessAdminEndpoints()
     {
-        using var adminClient = _fixture.CreateAdminClient();
+        using var adminClient = Fixture.CreateAdminClient();
         var createResponse = await adminClient.PostAsJsonAsync("/api/tokens/dashboard", new { }, TestContext.Current.CancellationToken);
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -98,7 +95,7 @@ public class DashboardTokenEndpointTests : IClassFixture<TestFixture>
         var token = doc.RootElement.GetProperty("token").GetString()!;
 
         // Use the dashboard token to access an admin-only endpoint (GET /api/keys)
-        using var dashboardClient = _fixture.CreateAuthenticatedClient(token);
+        using var dashboardClient = Fixture.CreateAuthenticatedClient(token);
         var keysResponse = await dashboardClient.GetAsync("/api/keys", TestContext.Current.CancellationToken);
         keysResponse.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -108,13 +105,13 @@ public class DashboardTokenEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ValidateMe_WithValidToken_Returns200()
     {
-        using var adminClient = _fixture.CreateAdminClient();
+        using var adminClient = Fixture.CreateAdminClient();
         var createResponse = await adminClient.PostAsJsonAsync("/api/tokens/dashboard", new { }, TestContext.Current.CancellationToken);
         var json = await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(json);
         var token = doc.RootElement.GetProperty("token").GetString()!;
 
-        using var dashboardClient = _fixture.CreateAuthenticatedClient(token);
+        using var dashboardClient = Fixture.CreateAuthenticatedClient(token);
         var meResponse = await dashboardClient.GetAsync("/api/tokens/dashboard/me", TestContext.Current.CancellationToken);
         meResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -127,7 +124,7 @@ public class DashboardTokenEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ValidateMe_NoToken_Returns401()
     {
-        var response = await _fixture.Client.GetAsync("/api/tokens/dashboard/me", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/api/tokens/dashboard/me", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -137,7 +134,7 @@ public class DashboardTokenEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ValidateMe_InvalidToken_Returns401()
     {
-        using var client = _fixture.CreateAuthenticatedClient("totally-invalid-jwt-token");
+        using var client = Fixture.CreateAuthenticatedClient("totally-invalid-jwt-token");
         var response = await client.GetAsync("/api/tokens/dashboard/me", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 

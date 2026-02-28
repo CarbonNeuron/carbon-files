@@ -6,23 +6,20 @@ using Xunit;
 
 namespace CarbonFiles.Api.Tests.Endpoints;
 
-public class KeyEndpointTests : IClassFixture<TestFixture>
+public class KeyEndpointTests : IntegrationTestBase
 {
     private static readonly JsonSerializerOptions SnakeCaseOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
-    private readonly TestFixture _fixture;
-
-    public KeyEndpointTests(TestFixture fixture) => _fixture = fixture;
 
     // ── Create ──────────────────────────────────────────────────────────
 
     [Fact]
     public async Task CreateKey_AsAdmin_Returns201WithFullKey()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var response = await client.PostAsJsonAsync("/api/keys", new { name = "test-agent" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -46,14 +43,14 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task CreateKey_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.PostAsJsonAsync("/api/keys", new { name = "test" }, TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.PostAsJsonAsync("/api/keys", new { name = "test" }, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
     public async Task CreateKey_EmptyName_Returns400()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var response = await client.PostAsJsonAsync("/api/keys", new { name = "" }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -65,7 +62,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task CreateKey_WhitespaceName_Returns400()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var response = await client.PostAsJsonAsync("/api/keys", new { name = "   " }, TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -76,7 +73,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ListKeys_AsAdmin_ReturnsPaginatedList()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         // Create a key first
         await client.PostAsJsonAsync("/api/keys", new { name = "list-test" }, TestContext.Current.CancellationToken);
@@ -94,14 +91,14 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ListKeys_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.GetAsync("/api/keys", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/api/keys", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
     public async Task ListKeys_SecretNotReturned()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         // Create a key
         var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "secret-check" }, TestContext.Current.CancellationToken);
@@ -123,7 +120,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ListKeys_PaginationWorks()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         // Create several keys
         for (int i = 0; i < 3; i++)
@@ -143,7 +140,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task ListKeys_SortByName()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         // Create keys with known names
         await client.PostAsJsonAsync("/api/keys", new { name = "alpha-sort" }, TestContext.Current.CancellationToken);
@@ -170,7 +167,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task DeleteKey_AsAdmin_Returns204()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         // Create a key
         var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "to-delete" }, TestContext.Current.CancellationToken);
@@ -190,7 +187,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task DeleteKey_NotFound_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var response = await client.DeleteAsync("/api/keys/cf4_nonexist", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -198,7 +195,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task DeleteKey_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.DeleteAsync("/api/keys/cf4_whatever", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.DeleteAsync("/api/keys/cf4_whatever", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -207,7 +204,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetKeyUsage_AsAdmin_ReturnsUsageStats()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         // Create a key
         var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "usage-test" }, TestContext.Current.CancellationToken);
@@ -232,7 +229,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetKeyUsage_SecretNotReturned()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         // Create a key
         var createResponse = await client.PostAsJsonAsync("/api/keys", new { name = "usage-secret-check" }, TestContext.Current.CancellationToken);
@@ -250,7 +247,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetKeyUsage_NotFound_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var response = await client.GetAsync("/api/keys/cf4_nonexist/usage", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -258,7 +255,7 @@ public class KeyEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task GetKeyUsage_NoAuth_Returns403()
     {
-        var response = await _fixture.Client.GetAsync("/api/keys/cf4_whatever/usage", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/api/keys/cf4_whatever/usage", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 }

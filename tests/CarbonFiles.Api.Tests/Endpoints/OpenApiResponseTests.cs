@@ -10,15 +10,12 @@ namespace CarbonFiles.Api.Tests.Endpoints;
 /// generated OpenAPI spec. Fetches /openapi/v1.json once and asserts that
 /// the expected response status codes appear for each path + method.
 /// </summary>
-public class OpenApiResponseTests : IClassFixture<TestFixture>
+public class OpenApiResponseTests : IntegrationTestBase
 {
-    private readonly TestFixture _fixture;
-
-    public OpenApiResponseTests(TestFixture fixture) => _fixture = fixture;
 
     private async Task<JsonElement> GetSpecAsync()
     {
-        var response = await _fixture.Client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         return JsonDocument.Parse(json).RootElement;

@@ -8,11 +8,8 @@ using Xunit;
 
 namespace CarbonFiles.Api.Tests.Endpoints;
 
-public class ShortUrlEndpointTests : IClassFixture<TestFixture>
+public class ShortUrlEndpointTests : IntegrationTestBase
 {
-    private readonly TestFixture _fixture;
-
-    public ShortUrlEndpointTests(TestFixture fixture) => _fixture = fixture;
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -55,13 +52,13 @@ public class ShortUrlEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Resolve_ValidCode_Returns302RedirectToContent()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var fileInfo = await UploadFileAsync(client, bucketId, "hello.txt", "Hello, World!");
         var shortCode = fileInfo.GetProperty("short_code").GetString()!;
 
-        using var noRedirectClient = _fixture.CreateNoRedirectClient();
+        using var noRedirectClient = Fixture.CreateNoRedirectClient();
         var response = await noRedirectClient.GetAsync($"/s/{shortCode}", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Redirect);
@@ -71,7 +68,7 @@ public class ShortUrlEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Resolve_NonexistentCode_Returns404()
     {
-        var response = await _fixture.Client.GetAsync("/s/zzzzzz", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.GetAsync("/s/zzzzzz", TestContext.Current.CancellationToken);
 
         // The default client follows redirects, so a 404 means no redirect was found
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -80,7 +77,7 @@ public class ShortUrlEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Resolve_ExpiredBucket_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var fileInfo = await UploadFileAsync(client, bucketId, "expire-test.txt", "will expire");
@@ -91,7 +88,7 @@ public class ShortUrlEndpointTests : IClassFixture<TestFixture>
         var updateResp = await client.PatchAsJsonAsync($"/api/buckets/{bucketId}", new { expires_in = pastEpoch }, TestContext.Current.CancellationToken);
         updateResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var noRedirectClient = _fixture.CreateNoRedirectClient();
+        using var noRedirectClient = Fixture.CreateNoRedirectClient();
         var response = await noRedirectClient.GetAsync($"/s/{shortCode}", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -101,7 +98,7 @@ public class ShortUrlEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Delete_AsAdmin_Returns204()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var fileInfo = await UploadFileAsync(client, bucketId, "del-short.txt", "delete short url");
@@ -114,21 +111,21 @@ public class ShortUrlEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Delete_AsPublic_Returns401()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var fileInfo = await UploadFileAsync(client, bucketId, "pub-short.txt", "public delete test");
         var shortCode = fileInfo.GetProperty("short_code").GetString()!;
 
         // Use the unauthenticated client
-        var response = await _fixture.Client.DeleteAsync($"/api/short/{shortCode}", TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.DeleteAsync($"/api/short/{shortCode}", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task Delete_ShortUrlOnly_FileStillExists()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var fileInfo = await UploadFileAsync(client, bucketId, "keep-file.txt", "file stays");
@@ -139,16 +136,16 @@ public class ShortUrlEndpointTests : IClassFixture<TestFixture>
         deleteResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // The short URL should no longer resolve
-        using var noRedirectClient = _fixture.CreateNoRedirectClient();
+        using var noRedirectClient = Fixture.CreateNoRedirectClient();
         var resolveResp = await noRedirectClient.GetAsync($"/s/{shortCode}", TestContext.Current.CancellationToken);
         resolveResp.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
         // But the file itself should still exist
-        var fileResp = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/keep-file.txt", TestContext.Current.CancellationToken);
+        var fileResp = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/keep-file.txt", TestContext.Current.CancellationToken);
         fileResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // And the file content should still be downloadable
-        var contentResp = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/keep-file.txt/content", TestContext.Current.CancellationToken);
+        var contentResp = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}/files/keep-file.txt/content", TestContext.Current.CancellationToken);
         contentResp.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await contentResp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         body.Should().Be("file stays");
@@ -157,7 +154,7 @@ public class ShortUrlEndpointTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Delete_NonexistentCode_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         var response = await client.DeleteAsync("/api/short/zzzzzz", TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);

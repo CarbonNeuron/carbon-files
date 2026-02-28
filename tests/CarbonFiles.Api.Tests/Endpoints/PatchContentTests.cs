@@ -8,11 +8,8 @@ using Xunit;
 
 namespace CarbonFiles.Api.Tests.Endpoints;
 
-public class PatchContentTests : IClassFixture<TestFixture>
+public class PatchContentTests : IntegrationTestBase
 {
-    private readonly TestFixture _fixture;
-
-    public PatchContentTests(TestFixture fixture) => _fixture = fixture;
 
     // -- Helpers ──────────────────────────────────────────────────────────
 
@@ -69,7 +66,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_OverwriteRange_UpdatesContent()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         // Upload: "Hello, World!"
@@ -87,7 +84,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Download and verify
-        var downloaded = await DownloadFileAsync(_fixture.Client, bucketId, "patch-test.txt");
+        var downloaded = await DownloadFileAsync(Fixture.Client, bucketId, "patch-test.txt");
         Encoding.UTF8.GetString(downloaded).Should().Be("Hello, Earth!");
     }
 
@@ -96,7 +93,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_AppendToFile_ExtendsContent()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         // Upload: "Hello"
@@ -114,7 +111,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Download and verify
-        var downloaded = await DownloadFileAsync(_fixture.Client, bucketId, "append-test.txt");
+        var downloaded = await DownloadFileAsync(Fixture.Client, bucketId, "append-test.txt");
         Encoding.UTF8.GetString(downloaded).Should().Be("Hello, World!");
     }
 
@@ -123,7 +120,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_NonexistentFile_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         var patchBody = Encoding.UTF8.GetBytes("data");
@@ -144,7 +141,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_WithoutAuth_Returns403()
     {
-        using var admin = _fixture.CreateAdminClient();
+        using var admin = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(admin);
 
         await UploadFileAsync(admin, bucketId, "auth-test.txt", Encoding.UTF8.GetBytes("original"));
@@ -155,7 +152,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
             patchBody,
             contentRange: "bytes 0-6/*");
 
-        var response = await _fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
+        var response = await Fixture.Client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -164,7 +161,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_MissingContentRange_WithoutAppend_Returns400()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "no-range.txt", Encoding.UTF8.GetBytes("original"));
@@ -185,7 +182,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_InvalidContentRange_Returns400()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "bad-range.txt", Encoding.UTF8.GetBytes("original"));
@@ -205,7 +202,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_OffsetBeyondFileSize_Returns416()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         // Upload a 5-byte file
@@ -227,7 +224,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_Append_UpdatesFileSize()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         // Upload 5 bytes
@@ -251,7 +248,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_Overwrite_DoesNotChangeSize_WhenWithinBounds()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         // Upload: "AAAAAAAAAA" (10 bytes)
@@ -276,7 +273,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_OverwriteMiddle_ContentIsCorrect()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         // Upload: "0123456789" (10 bytes)
@@ -294,14 +291,14 @@ public class PatchContentTests : IClassFixture<TestFixture>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Download and verify full content
-        var downloaded = await DownloadFileAsync(_fixture.Client, bucketId, "verify-content.txt");
+        var downloaded = await DownloadFileAsync(Fixture.Client, bucketId, "verify-content.txt");
         Encoding.UTF8.GetString(downloaded).Should().Be("012XYZ6789");
     }
 
     [Fact]
     public async Task Patch_OverwriteAtStart_ContentIsCorrect()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         // Upload: "ABCDEFGHIJ" (10 bytes)
@@ -317,7 +314,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var downloaded = await DownloadFileAsync(_fixture.Client, bucketId, "start-patch.txt");
+        var downloaded = await DownloadFileAsync(Fixture.Client, bucketId, "start-patch.txt");
         Encoding.UTF8.GetString(downloaded).Should().Be("XYZDEFGHIJ");
     }
 
@@ -326,7 +323,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_AppendWithContentRangeStarStar_Works()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "star-append.txt", Encoding.UTF8.GetBytes("Start"));
@@ -342,7 +339,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var downloaded = await DownloadFileAsync(_fixture.Client, bucketId, "star-append.txt");
+        var downloaded = await DownloadFileAsync(Fixture.Client, bucketId, "star-append.txt");
         Encoding.UTF8.GetString(downloaded).Should().Be("StartEnd");
     }
 
@@ -351,14 +348,14 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_Append_UpdatesBucketTotalSize()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         // Upload 5 bytes
         await UploadFileAsync(client, bucketId, "bucket-size.txt", Encoding.UTF8.GetBytes("Hello"));
 
         // Check initial bucket stats
-        var bucketResp1 = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
+        var bucketResp1 = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         var bucket1 = await ParseJsonAsync(bucketResp1);
         var initialSize = bucket1.GetProperty("total_size").GetInt64();
         initialSize.Should().Be(5);
@@ -374,7 +371,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Check bucket stats updated
-        var bucketResp2 = await _fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
+        var bucketResp2 = await Fixture.Client.GetAsync($"/api/buckets/{bucketId}", TestContext.Current.CancellationToken);
         var bucket2 = await ParseJsonAsync(bucketResp2);
         bucket2.GetProperty("total_size").GetInt64().Should().Be(13); // 5 + 8
     }
@@ -384,7 +381,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_ReturnsUpdatedMetadata()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "meta-test.txt", Encoding.UTF8.GetBytes("original"));
@@ -410,7 +407,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_NonexistentBucket_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
 
         var patchBody = Encoding.UTF8.GetBytes("data");
         var request = CreatePatchRequest(
@@ -427,7 +424,7 @@ public class PatchContentTests : IClassFixture<TestFixture>
     [Fact]
     public async Task Patch_PathWithoutContent_Returns404()
     {
-        using var client = _fixture.CreateAdminClient();
+        using var client = Fixture.CreateAdminClient();
         var bucketId = await CreateBucketAsync(client);
 
         await UploadFileAsync(client, bucketId, "no-content-suffix.txt", Encoding.UTF8.GetBytes("data"));
