@@ -1,0 +1,32 @@
+{
+  "name": "@carbonfiles/client",
+  "version": "0.0.0",
+  "description": "TypeScript client for the CarbonFiles API",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "generate": "openapi-ts",
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CarbonNeuron/carbon-files.git",
+    "directory": "clients/typescript"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.93.0",
+    "typescript": "~5.8.0"
+  }
+}
