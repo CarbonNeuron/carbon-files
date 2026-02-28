@@ -8,7 +8,7 @@ using CarbonFiles.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
-var builder = WebApplication.CreateSlimBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 // JSON serialization for AOT
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -51,7 +51,18 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Trust forwarded headers from reverse proxy (X-Forwarded-For, X-Forwarded-Proto)
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                             | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // Ensure data directory exists
 var dataDir = builder.Configuration.GetValue<string>("CarbonFiles:DataDir") ?? "./data";
