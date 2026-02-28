@@ -3,6 +3,7 @@
     <Project Path="src/CarbonFiles.Api/CarbonFiles.Api.csproj" />
     <Project Path="src/CarbonFiles.Core/CarbonFiles.Core.csproj" />
     <Project Path="src/CarbonFiles.Infrastructure/CarbonFiles.Infrastructure.csproj" />
+    <Project Path="src/CarbonFiles.Migrator/CarbonFiles.Migrator.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CarbonFiles.Api.Tests/CarbonFiles.Api.Tests.csproj" />
