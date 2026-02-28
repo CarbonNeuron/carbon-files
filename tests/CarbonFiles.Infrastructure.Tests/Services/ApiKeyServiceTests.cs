@@ -6,6 +6,7 @@ using CarbonFiles.Infrastructure.Data.Entities;
 using CarbonFiles.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace CarbonFiles.Infrastructure.Tests.Services;
@@ -25,7 +26,7 @@ public class ApiKeyServiceTests : IDisposable
         _db.Database.OpenConnection();
         _db.Database.EnsureCreated();
 
-        _sut = new ApiKeyService(_db);
+        _sut = new ApiKeyService(_db, NullLogger<ApiKeyService>.Instance);
     }
 
     public void Dispose()

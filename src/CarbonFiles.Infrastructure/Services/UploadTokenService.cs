@@ -6,16 +6,19 @@ using CarbonFiles.Core.Utilities;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CarbonFiles.Infrastructure.Services;
 
 public sealed class UploadTokenService : IUploadTokenService
 {
     private readonly CarbonFilesDbContext _db;
+    private readonly ILogger<UploadTokenService> _logger;
 
-    public UploadTokenService(CarbonFilesDbContext db)
+    public UploadTokenService(CarbonFilesDbContext db, ILogger<UploadTokenService> logger)
     {
         _db = db;
+        _logger = logger;
     }
 
     public async Task<UploadTokenResponse> CreateAsync(string bucketId, CreateUploadTokenRequest request, AuthContext auth)
@@ -47,6 +50,9 @@ public sealed class UploadTokenService : IUploadTokenService
         _db.UploadTokens.Add(entity);
         await _db.SaveChangesAsync();
 
+        _logger.LogInformation("Created upload token for bucket {BucketId} (expires {ExpiresAt}, max uploads {MaxUploads})",
+            bucketId, entity.ExpiresAt.ToString("o"), request.MaxUploads?.ToString() ?? "unlimited");
+
         return new UploadTokenResponse
         {
             Token = token,
@@ -61,15 +67,24 @@ public sealed class UploadTokenService : IUploadTokenService
     {
         var entity = await _db.UploadTokens.FirstOrDefaultAsync(t => t.Token == token);
         if (entity == null)
+        {
+            _logger.LogDebug("Upload token not found");
             return (string.Empty, false);
+        }
 
         // Check not expired
         if (entity.ExpiresAt <= DateTime.UtcNow)
+        {
+            _logger.LogDebug("Upload token for bucket {BucketId} is expired", entity.BucketId);
             return (entity.BucketId, false);
+        }
 
         // Check uploads_used < max_uploads (if max_uploads set)
         if (entity.MaxUploads.HasValue && entity.UploadsUsed >= entity.MaxUploads.Value)
+        {
+            _logger.LogDebug("Upload token for bucket {BucketId} exhausted ({Used}/{Max})", entity.BucketId, entity.UploadsUsed, entity.MaxUploads.Value);
             return (entity.BucketId, false);
+        }
 
         return (entity.BucketId, true);
     }

@@ -7,14 +7,20 @@ using CarbonFiles.Core.Utilities;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CarbonFiles.Infrastructure.Services;
 
 public sealed class ApiKeyService : IApiKeyService
 {
     private readonly CarbonFilesDbContext _db;
+    private readonly ILogger<ApiKeyService> _logger;
 
-    public ApiKeyService(CarbonFilesDbContext db) => _db = db;
+    public ApiKeyService(CarbonFilesDbContext db, ILogger<ApiKeyService> logger)
+    {
+        _db = db;
+        _logger = logger;
+    }
 
     public async Task<ApiKeyResponse> CreateAsync(string name)
     {
@@ -33,6 +39,8 @@ public sealed class ApiKeyService : IApiKeyService
         };
         _db.ApiKeys.Add(entity);
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Created API key {Prefix} with name {Name}", prefix, name);
 
         return new ApiKeyResponse
         {
@@ -98,10 +106,16 @@ public sealed class ApiKeyService : IApiKeyService
     {
         var entity = await _db.ApiKeys.FindAsync(prefix);
         if (entity == null)
+        {
+            _logger.LogDebug("API key {Prefix} not found for deletion", prefix);
             return false;
+        }
 
         _db.ApiKeys.Remove(entity);
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Deleted API key {Prefix}", prefix);
+
         return true;
     }
 
@@ -109,7 +123,10 @@ public sealed class ApiKeyService : IApiKeyService
     {
         var entity = await _db.ApiKeys.FirstOrDefaultAsync(k => k.Prefix == prefix);
         if (entity == null)
+        {
+            _logger.LogDebug("API key {Prefix} not found for usage query", prefix);
             return null;
+        }
 
         var buckets = await _db.Buckets
             .Where(b => b.OwnerKeyPrefix == prefix)
@@ -152,18 +169,27 @@ public sealed class ApiKeyService : IApiKeyService
         // Key format: cf4_{8hex}_{32hex}
         var parts = fullKey.Split('_', 3);
         if (parts.Length != 3 || parts[0] != "cf4")
+        {
+            _logger.LogDebug("API key validation failed: invalid format");
             return null;
+        }
 
         var prefix = $"cf4_{parts[1]}";
         var secret = parts[2];
 
         var entity = await _db.ApiKeys.FirstOrDefaultAsync(k => k.Prefix == prefix);
         if (entity == null)
+        {
+            _logger.LogDebug("API key validation failed: prefix {Prefix} not found", prefix);
             return null;
+        }
 
         var hashed = HashSecret(secret);
         if (hashed != entity.HashedSecret)
+        {
+            _logger.LogWarning("API key validation failed: invalid secret for prefix {Prefix}", prefix);
             return null;
+        }
 
         return (entity.Name, entity.Prefix);
     }

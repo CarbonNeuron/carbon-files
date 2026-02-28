@@ -5,6 +5,7 @@ using CarbonFiles.Infrastructure.Data.Entities;
 using CarbonFiles.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace CarbonFiles.Infrastructure.Tests.Services;
@@ -24,7 +25,7 @@ public class UploadTokenServiceTests : IDisposable
         _db.Database.OpenConnection();
         _db.Database.EnsureCreated();
 
-        _sut = new UploadTokenService(_db);
+        _sut = new UploadTokenService(_db, NullLogger<UploadTokenService>.Instance);
     }
 
     public void Dispose()
