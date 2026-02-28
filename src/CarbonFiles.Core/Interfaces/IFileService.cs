@@ -1,0 +1,11 @@
+using CarbonFiles.Core.Models;
+
+namespace CarbonFiles.Core.Interfaces;
+
+public interface IFileService
+{
+    Task<PaginatedResponse<BucketFile>> ListAsync(string bucketId, PaginationParams pagination);
+    Task<BucketFile?> GetMetadataAsync(string bucketId, string path);
+    Task<bool> DeleteAsync(string bucketId, string path, AuthContext auth);
+    Task UpdateLastUsedAsync(string bucketId);
+}
