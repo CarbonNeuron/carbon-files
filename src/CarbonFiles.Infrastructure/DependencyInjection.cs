@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddSingleton(new JwtHelper(options.EffectiveJwtSecret));
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IApiKeyService, ApiKeyService>();
+        services.AddScoped<IBucketService, BucketService>();
 
         return services;
     }
