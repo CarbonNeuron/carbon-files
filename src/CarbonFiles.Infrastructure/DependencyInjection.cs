@@ -2,6 +2,7 @@ using CarbonFiles.Core.Configuration;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Infrastructure.Auth;
 using CarbonFiles.Infrastructure.Data;
+using CarbonFiles.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +26,7 @@ public static class DependencyInjection
         services.AddMemoryCache();
         services.AddSingleton(new JwtHelper(options.EffectiveJwtSecret));
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IApiKeyService, ApiKeyService>();
 
         return services;
     }
