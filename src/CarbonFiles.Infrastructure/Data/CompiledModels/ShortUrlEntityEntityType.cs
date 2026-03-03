@@ -131,6 +131,8 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             createdAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
+            createdAt.SetComparer(createdAt.TypeMapping.Comparer);
+            createdAt.SetKeyComparer(createdAt.TypeMapping.KeyComparer);
 
             var filePath = runtimeEntityType.AddProperty(
                 "FilePath",

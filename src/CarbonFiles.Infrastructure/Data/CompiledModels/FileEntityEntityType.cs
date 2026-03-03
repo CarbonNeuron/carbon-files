@@ -134,6 +134,8 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             createdAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
+            createdAt.SetComparer(createdAt.TypeMapping.Comparer);
+            createdAt.SetKeyComparer(createdAt.TypeMapping.KeyComparer);
 
             var mimeType = runtimeEntityType.AddProperty(
                 "MimeType",
@@ -320,6 +322,8 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             updatedAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
+            updatedAt.SetComparer(updatedAt.TypeMapping.Comparer);
+            updatedAt.SetKeyComparer(updatedAt.TypeMapping.KeyComparer);
 
             var key = runtimeEntityType.AddKey(
                 new[] { bucketId, path });

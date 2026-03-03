@@ -132,6 +132,8 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             createdAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
+            createdAt.SetComparer(createdAt.TypeMapping.Comparer);
+            createdAt.SetKeyComparer(createdAt.TypeMapping.KeyComparer);
 
             var expiresAt = runtimeEntityType.AddProperty(
                 "ExpiresAt",
@@ -166,6 +168,8 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             expiresAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
+            expiresAt.SetComparer(expiresAt.TypeMapping.Comparer);
+            expiresAt.SetKeyComparer(expiresAt.TypeMapping.KeyComparer);
 
             var maxUploads = runtimeEntityType.AddProperty(
                 "MaxUploads",
