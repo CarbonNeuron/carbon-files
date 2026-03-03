@@ -9,5 +9,6 @@
     <Project Path="tests/CarbonFiles.Api.Tests/CarbonFiles.Api.Tests.csproj" />
     <Project Path="tests/CarbonFiles.Core.Tests/CarbonFiles.Core.Tests.csproj" />
     <Project Path="tests/CarbonFiles.Infrastructure.Tests/CarbonFiles.Infrastructure.Tests.csproj" />
+    <Project Path="tests/CarbonFiles.E2E.Tests/CarbonFiles.E2E.Tests.csproj" />
   </Folder>
 </Solution>
