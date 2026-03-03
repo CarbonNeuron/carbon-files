@@ -18,7 +18,7 @@ openapi-python-client generate \
 rm -rf carbonfiles_client
 cp -r generated/carbonfiles_client .
 cp generated/pyproject.toml .
-cp generated/README.md . 2>/dev/null || true
+# NOTE: not copying generated/README.md — using hand-written README instead
 rm -rf generated
 
 echo "Python client generated successfully"
