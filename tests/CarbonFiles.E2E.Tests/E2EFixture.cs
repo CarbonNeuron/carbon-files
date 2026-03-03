@@ -51,6 +51,14 @@ public class E2EFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
+        // Capture container logs for debugging before tearing down
+        try
+        {
+            var logs = await RunComposeOutput("logs", "--no-color");
+            Console.WriteLine($"=== Container logs ===\n{logs}");
+        }
+        catch { }
+
         Client.Dispose();
         await RunCompose("down", "-v", "--remove-orphans");
     }
@@ -79,12 +87,14 @@ public class E2EFixture : IAsyncLifetime
             RedirectStandardError = true,
         };
         var proc = Process.Start(psi)!;
+        // Read both streams concurrently to avoid deadlock when buffers fill
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
         await proc.WaitForExitAsync();
+        var stderr = await stderrTask;
+        await stdoutTask;
         if (proc.ExitCode != 0)
-        {
-            var stderr = await proc.StandardError.ReadToEndAsync();
             throw new Exception($"docker compose {string.Join(' ', args)} failed (exit {proc.ExitCode}): {stderr}");
-        }
     }
 
     private async Task<string> RunComposeOutput(params string[] args)
@@ -95,8 +105,10 @@ public class E2EFixture : IAsyncLifetime
             RedirectStandardError = true,
         };
         var proc = Process.Start(psi)!;
-        var output = await proc.StandardOutput.ReadToEndAsync();
+        var outputTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
         await proc.WaitForExitAsync();
-        return output;
+        await stderrTask;
+        return await outputTask;
     }
 }
