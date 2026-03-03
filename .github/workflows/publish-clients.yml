@@ -183,6 +183,8 @@ jobs:
         run: Test-ModuleManifest CarbonFiles.psd1
 
       - name: Publish
-        run: Publish-Module -Path $PWD -NuGetApiKey $env:PSGALLERY_API_KEY -Verbose
+        run: |
+          Copy-Item -Path $PWD -Destination $env:RUNNER_TEMP/CarbonFiles -Recurse
+          Publish-Module -Path $env:RUNNER_TEMP/CarbonFiles -NuGetApiKey $env:PSGALLERY_API_KEY -Verbose
         env:
           PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
