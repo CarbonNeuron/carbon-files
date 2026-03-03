@@ -1,0 +1,17 @@
+services:
+  api:
+    build: .
+    ports:
+      - "0:8080"
+    environment:
+      - CarbonFiles__AdminKey=e2e-test-admin-key
+      - CarbonFiles__DataDir=/app/data
+      - CarbonFiles__DbPath=/app/data/carbonfiles.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+    tmpfs:
+      - /app/data
