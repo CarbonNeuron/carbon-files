@@ -4,12 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <PublishTrimmed>true</PublishTrimmed>
-    <PublishSingleFile>true</PublishSingleFile>
+    <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <!-- EF Core uses reflection-based expression trees that produce trim warnings.
-         These are unavoidable when using EF Core with PublishTrimmed. The JIT runtime
-         handles these correctly — they only matter for full Native AOT (which we don't use). -->
+    <!-- EF Core compiled models produce unavoidable AOT/trim warnings for
+         expression-tree based query compilation (queries are interpreted at runtime). -->
     <NoWarn>$(NoWarn);IL2026;IL2104;IL3050</NoWarn>
   </PropertyGroup>
 
