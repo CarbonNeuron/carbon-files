@@ -141,22 +141,25 @@ jobs:
       - name: Install tools
         run: pip install openapi-python-client ruff
 
-      - name: Update version in config
-        run: |
-          sed -i "s/package_version_override: .*/package_version_override: \"${{ needs.export-spec.outputs.version }}\"/" config.yml
-
       - name: Generate client
         run: |
-          chmod +x generate.sh
-          ./generate.sh
+          openapi-python-client generate \
+            --path openapi.json \
+            --config config.yml \
+            --meta poetry \
+            --output-path ./generated \
+            --overwrite
 
       - name: Build
-        run: pip install poetry build && python -m build
+        run: |
+          cd generated
+          sed -i "s/^version = .*/version = \"${{ needs.export-spec.outputs.version }}\"/" pyproject.toml
+          pip install build && python -m build
 
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: clients/python/dist/
+          packages-dir: clients/python/generated/dist/
 
   publish-powershell:
     needs: export-spec
