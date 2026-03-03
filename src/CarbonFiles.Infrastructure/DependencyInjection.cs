@@ -2,6 +2,7 @@ using CarbonFiles.Core.Configuration;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Infrastructure.Auth;
 using CarbonFiles.Infrastructure.Data;
+using CarbonFiles.Infrastructure.Data.CompiledModels;
 using CarbonFiles.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -20,7 +21,8 @@ public static class DependencyInjection
 
         // EF Core + SQLite
         services.AddDbContext<CarbonFilesDbContext>(opts =>
-            opts.UseSqlite($"Data Source={options.DbPath}"));
+            opts.UseSqlite($"Data Source={options.DbPath}")
+                .UseModel(CarbonFilesDbContextModel.Instance));
 
         // Auth
         services.AddMemoryCache();
