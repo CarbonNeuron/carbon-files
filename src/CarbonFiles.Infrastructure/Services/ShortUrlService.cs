@@ -62,7 +62,7 @@ public sealed class ShortUrlService : IShortUrlService
     {
         var cached = _cache.GetShortUrl(code);
         if (cached != null)
-            return $"/api/buckets/{cached.Value.BucketId}/files/{Uri.EscapeDataString(cached.Value.FilePath)}/content";
+            return $"/api/buckets/{cached.Value.BucketId}/files/{EncodeFilePath(cached.Value.FilePath)}/content";
 
         var shortUrl = await Db.QueryFirstOrDefaultAsync(_db,
             "SELECT Code, BucketId, FilePath, CreatedAt FROM ShortUrls WHERE Code = @code",
@@ -89,8 +89,15 @@ public sealed class ShortUrlService : IShortUrlService
         }
 
         _cache.SetShortUrl(code, shortUrl.BucketId, shortUrl.FilePath);
-        return $"/api/buckets/{shortUrl.BucketId}/files/{Uri.EscapeDataString(shortUrl.FilePath)}/content";
+        return $"/api/buckets/{shortUrl.BucketId}/files/{EncodeFilePath(shortUrl.FilePath)}/content";
     }
+
+    /// <summary>
+    /// Encodes each path segment individually, preserving '/' separators.
+    /// Uri.EscapeDataString encodes '/' to '%2F' which breaks catch-all routes.
+    /// </summary>
+    private static string EncodeFilePath(string filePath) =>
+        string.Join("/", filePath.Split('/').Select(Uri.EscapeDataString));
 
     public async Task<bool> DeleteAsync(string code, AuthContext auth)
     {
