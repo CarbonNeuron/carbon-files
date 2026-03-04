@@ -1,1 +1,2 @@
-export * from './client/index.js';
+// Entry point - will be populated in later tasks
+export {};

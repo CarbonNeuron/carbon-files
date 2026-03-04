@@ -1,22 +1,23 @@
 {
   "name": "@carbonfiles/client",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "TypeScript client for the CarbonFiles API",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
-    "generate": "openapi-ts",
-    "build": "tsc",
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },
   "license": "MIT",
@@ -26,7 +27,8 @@
     "directory": "clients/typescript"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "0.93.0",
-    "typescript": "~5.8.0"
+    "tsup": "^8.0.0",
+    "typescript": "~5.8.0",
+    "vitest": "^3.0.0"
   }
 }
