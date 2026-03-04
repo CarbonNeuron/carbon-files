@@ -1,0 +1,176 @@
+using System.Net;
+using CarbonFiles.Client;
+using CarbonFiles.Client.Models;
+using FluentAssertions;
+using Xunit;
+
+namespace CarbonFiles.Client.Tests.Resources;
+
+public class FileOperationsTests
+{
+    private static (CarbonFilesClient Client, MockHandler Handler) CreateClient()
+    {
+        var handler = new MockHandler();
+        var client = new CarbonFilesClient(new CarbonFilesClientOptions
+        {
+            BaseAddress = new Uri("https://example.com"),
+            ApiKey = "test-key",
+            HttpClient = new HttpClient(handler) { BaseAddress = new Uri("https://example.com") }
+        });
+        return (client, handler);
+    }
+
+    [Fact]
+    public async Task ListAsync_GetsPaginatedFiles()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"items":[{"path":"test.txt","name":"test.txt","size":100,"mime_type":"text/plain","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],"total":1,"limit":10,"offset":0}""");
+
+        var result = await client.Buckets["b1"].Files.ListAsync(
+            new PaginationOptions { Limit = 10, Offset = 0, Sort = "name", Order = "asc" },
+            TestContext.Current.CancellationToken);
+
+        result.Items.Should().HaveCount(1);
+        result.Items[0].Path.Should().Be("test.txt");
+        result.Total.Should().Be(1);
+        var req = handler.Requests[0];
+        req.Method.Should().Be(HttpMethod.Get);
+        var query = req.RequestUri!.Query;
+        query.Should().Contain("limit=10");
+        query.Should().Contain("offset=0");
+        query.Should().Contain("sort=name");
+        query.Should().Contain("order=asc");
+        req.RequestUri!.AbsolutePath.Should().Be("/api/buckets/b1/files");
+    }
+
+    [Fact]
+    public async Task ListDirectoryAsync_GetsDirectoryListing_WithPath()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"files":[{"path":"docs/readme.txt","name":"readme.txt","size":50,"mime_type":"text/plain","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],"folders":["docs/sub"],"total_files":1,"total_folders":1,"limit":20,"offset":0}""");
+
+        var result = await client.Buckets["b1"].Files.ListDirectoryAsync(
+            path: "docs",
+            pagination: new PaginationOptions { Limit = 20 },
+            ct: TestContext.Current.CancellationToken);
+
+        result.Files.Should().HaveCount(1);
+        result.Folders.Should().ContainSingle("docs/sub");
+        result.TotalFiles.Should().Be(1);
+        var query = handler.Requests[0].RequestUri!.Query;
+        query.Should().Contain("path=docs");
+        query.Should().Contain("limit=20");
+        handler.Requests[0].RequestUri!.AbsolutePath.Should().Be("/api/buckets/b1/ls");
+    }
+
+    [Fact]
+    public async Task UploadAsync_SendsPutWithFilename()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"uploaded":[{"path":"hello.txt","name":"hello.txt","size":13,"mime_type":"text/plain","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}]}""");
+
+        using var stream = new MemoryStream("Hello, World!"u8.ToArray());
+        var result = await client.Buckets["b1"].Files.UploadAsync(
+            stream, "hello.txt", ct: TestContext.Current.CancellationToken);
+
+        result.Uploaded.Should().HaveCount(1);
+        result.Uploaded[0].Name.Should().Be("hello.txt");
+        var req = handler.Requests[0];
+        req.Method.Should().Be(HttpMethod.Put);
+        req.RequestUri!.AbsolutePath.Should().Be("/api/buckets/b1/upload/stream");
+        req.RequestUri!.Query.Should().Contain("filename=hello.txt");
+    }
+
+    [Fact]
+    public async Task UploadAsync_WithProgress_ReportsProgress()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"uploaded":[{"path":"data.bin","name":"data.bin","size":1024,"mime_type":"application/octet-stream","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}]}""");
+
+        var data = new byte[1024];
+        Array.Fill(data, (byte)0x42);
+        using var stream = new MemoryStream(data);
+
+        var reports = new List<UploadProgress>();
+        var progress = new Progress<UploadProgress>(p => reports.Add(p));
+
+        await client.Buckets["b1"].Files.UploadAsync(
+            stream, "data.bin", progress, ct: TestContext.Current.CancellationToken);
+
+        // Progress should have been reported at least once
+        reports.Should().NotBeEmpty();
+        // The last report should have sent all bytes
+        reports[^1].BytesSent.Should().Be(1024);
+        reports[^1].TotalBytes.Should().Be(1024);
+        reports[^1].Percentage.Should().Be(100);
+    }
+
+    [Fact]
+    public async Task UploadAsync_WithUploadToken_PassesTokenInQuery()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"uploaded":[{"path":"file.txt","name":"file.txt","size":5,"mime_type":"text/plain","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}]}""");
+
+        using var stream = new MemoryStream("hello"u8.ToArray());
+        await client.Buckets["b1"].Files.UploadAsync(
+            stream, "file.txt", uploadToken: "cfu_abc123", ct: TestContext.Current.CancellationToken);
+
+        var query = handler.Requests[0].RequestUri!.Query;
+        query.Should().Contain("token=cfu_abc123");
+    }
+
+    [Fact]
+    public async Task Indexer_GetMetadataAsync_ReturnsFileInfo()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"path":"docs/readme.txt","name":"readme.txt","size":256,"mime_type":"text/plain","short_code":"abc123","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}""");
+
+        var file = await client.Buckets["b1"].Files["docs/readme.txt"]
+            .GetMetadataAsync(TestContext.Current.CancellationToken);
+
+        file.Path.Should().Be("docs/readme.txt");
+        file.Name.Should().Be("readme.txt");
+        file.Size.Should().Be(256);
+        file.ShortCode.Should().Be("abc123");
+        var req = handler.Requests[0];
+        req.Method.Should().Be(HttpMethod.Get);
+        req.RequestUri!.AbsolutePath.Should().Be("/api/buckets/b1/files/docs%2Freadme.txt");
+    }
+
+    [Fact]
+    public async Task Indexer_DownloadAsync_ReturnsStream()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK, "file-content-here", "application/octet-stream");
+
+        var stream = await client.Buckets["b1"].Files["test.txt"]
+            .DownloadAsync(TestContext.Current.CancellationToken);
+
+        using var reader = new StreamReader(stream);
+        var content = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
+        content.Should().Be("file-content-here");
+        var req = handler.Requests[0];
+        req.Method.Should().Be(HttpMethod.Get);
+        req.RequestUri!.AbsolutePath.Should().Be("/api/buckets/b1/files/test.txt/content");
+    }
+
+    [Fact]
+    public async Task Indexer_DeleteAsync_DeletesFile()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.NoContent, "");
+
+        await client.Buckets["b1"].Files["test.txt"]
+            .DeleteAsync(TestContext.Current.CancellationToken);
+
+        var req = handler.Requests[0];
+        req.Method.Should().Be(HttpMethod.Delete);
+        req.RequestUri!.AbsolutePath.Should().Be("/api/buckets/b1/files/test.txt");
+    }
+}
