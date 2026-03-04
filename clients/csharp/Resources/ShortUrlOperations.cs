@@ -6,4 +6,6 @@ public class ShortUrlOperations
 {
     private readonly HttpTransport _transport;
     internal ShortUrlOperations(HttpTransport transport) => _transport = transport;
+
+    public ShortUrlResource this[string code] => new(_transport, code);
 }
