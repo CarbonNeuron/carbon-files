@@ -131,8 +131,14 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             createdAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
-            createdAt.SetComparer(createdAt.TypeMapping.Comparer);
-            createdAt.SetKeyComparer(createdAt.TypeMapping.KeyComparer);
+            createdAt.SetComparer(new ValueComparer<DateTime>(
+                (DateTime v1, DateTime v2) => v1.Equals(v2),
+                (DateTime v) => v.GetHashCode(),
+                (DateTime v) => v));
+            createdAt.SetKeyComparer(new ValueComparer<DateTime>(
+                (DateTime v1, DateTime v2) => v1.Equals(v2),
+                (DateTime v) => v.GetHashCode(),
+                (DateTime v) => v));
 
             var filePath = runtimeEntityType.AddProperty(
                 "FilePath",

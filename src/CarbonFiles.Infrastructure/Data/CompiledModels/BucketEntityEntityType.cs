@@ -98,8 +98,14 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             createdAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
-            createdAt.SetComparer(createdAt.TypeMapping.Comparer);
-            createdAt.SetKeyComparer(createdAt.TypeMapping.KeyComparer);
+            createdAt.SetComparer(new ValueComparer<DateTime>(
+                (DateTime v1, DateTime v2) => v1.Equals(v2),
+                (DateTime v) => v.GetHashCode(),
+                (DateTime v) => v));
+            createdAt.SetKeyComparer(new ValueComparer<DateTime>(
+                (DateTime v1, DateTime v2) => v1.Equals(v2),
+                (DateTime v) => v.GetHashCode(),
+                (DateTime v) => v));
 
             var description = runtimeEntityType.AddProperty(
                 "Description",
@@ -217,8 +223,14 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             expiresAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
-            expiresAt.SetComparer(new NullableValueComparer<DateTime>(expiresAt.TypeMapping.Comparer));
-            expiresAt.SetKeyComparer(new NullableValueComparer<DateTime>(expiresAt.TypeMapping.KeyComparer));
+            expiresAt.SetComparer(new ValueComparer<DateTime?>(
+                (DateTime? v1, DateTime? v2) => v1.HasValue && v2.HasValue ? v1.Equals(v2) : !v1.HasValue && !v2.HasValue,
+                (DateTime? v) => v.HasValue ? v.GetHashCode() : 0,
+                (DateTime? v) => v.HasValue ? v.Value : default));
+            expiresAt.SetKeyComparer(new ValueComparer<DateTime?>(
+                (DateTime? v1, DateTime? v2) => v1.HasValue && v2.HasValue ? v1.Equals(v2) : !v1.HasValue && !v2.HasValue,
+                (DateTime? v) => v.HasValue ? v.GetHashCode() : 0,
+                (DateTime? v) => v.HasValue ? v.Value : default));
 
             var fileCount = runtimeEntityType.AddProperty(
                 "FileCount",
@@ -301,8 +313,14 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             lastUsedAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
-            lastUsedAt.SetComparer(new NullableValueComparer<DateTime>(lastUsedAt.TypeMapping.Comparer));
-            lastUsedAt.SetKeyComparer(new NullableValueComparer<DateTime>(lastUsedAt.TypeMapping.KeyComparer));
+            lastUsedAt.SetComparer(new ValueComparer<DateTime?>(
+                (DateTime? v1, DateTime? v2) => v1.HasValue && v2.HasValue ? v1.Equals(v2) : !v1.HasValue && !v2.HasValue,
+                (DateTime? v) => v.HasValue ? v.GetHashCode() : 0,
+                (DateTime? v) => v.HasValue ? v.Value : default));
+            lastUsedAt.SetKeyComparer(new ValueComparer<DateTime?>(
+                (DateTime? v1, DateTime? v2) => v1.HasValue && v2.HasValue ? v1.Equals(v2) : !v1.HasValue && !v2.HasValue,
+                (DateTime? v) => v.HasValue ? v.GetHashCode() : 0,
+                (DateTime? v) => v.HasValue ? v.Value : default));
 
             var name = runtimeEntityType.AddProperty(
                 "Name",

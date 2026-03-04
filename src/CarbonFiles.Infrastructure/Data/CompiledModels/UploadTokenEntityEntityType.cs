@@ -132,8 +132,14 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             createdAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
-            createdAt.SetComparer(createdAt.TypeMapping.Comparer);
-            createdAt.SetKeyComparer(createdAt.TypeMapping.KeyComparer);
+            createdAt.SetComparer(new ValueComparer<DateTime>(
+                (DateTime v1, DateTime v2) => v1.Equals(v2),
+                (DateTime v) => v.GetHashCode(),
+                (DateTime v) => v));
+            createdAt.SetKeyComparer(new ValueComparer<DateTime>(
+                (DateTime v1, DateTime v2) => v1.Equals(v2),
+                (DateTime v) => v.GetHashCode(),
+                (DateTime v) => v));
 
             var expiresAt = runtimeEntityType.AddProperty(
                 "ExpiresAt",
@@ -168,8 +174,14 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
             expiresAt.TypeMapping = SqliteDateTimeTypeMapping.Default;
-            expiresAt.SetComparer(expiresAt.TypeMapping.Comparer);
-            expiresAt.SetKeyComparer(expiresAt.TypeMapping.KeyComparer);
+            expiresAt.SetComparer(new ValueComparer<DateTime>(
+                (DateTime v1, DateTime v2) => v1.Equals(v2),
+                (DateTime v) => v.GetHashCode(),
+                (DateTime v) => v));
+            expiresAt.SetKeyComparer(new ValueComparer<DateTime>(
+                (DateTime v1, DateTime v2) => v1.Equals(v2),
+                (DateTime v) => v.GetHashCode(),
+                (DateTime v) => v));
 
             var maxUploads = runtimeEntityType.AddProperty(
                 "MaxUploads",
@@ -218,8 +230,14 @@ namespace CarbonFiles.Infrastructure.Data.CompiledModels
                     int (int v) => v),
                 mappingInfo: new RelationalTypeMappingInfo(
                     storeTypeName: "INTEGER"));
-            maxUploads.SetComparer(new NullableValueComparer<int>(maxUploads.TypeMapping.Comparer));
-            maxUploads.SetKeyComparer(new NullableValueComparer<int>(maxUploads.TypeMapping.KeyComparer));
+            maxUploads.SetComparer(new ValueComparer<int?>(
+                (int? v1, int? v2) => v1.HasValue && v2.HasValue ? v1.Equals(v2) : !v1.HasValue && !v2.HasValue,
+                (int? v) => v.HasValue ? v.GetHashCode() : 0,
+                (int? v) => v.HasValue ? v.Value : default));
+            maxUploads.SetKeyComparer(new ValueComparer<int?>(
+                (int? v1, int? v2) => v1.HasValue && v2.HasValue ? v1.Equals(v2) : !v1.HasValue && !v2.HasValue,
+                (int? v) => v.HasValue ? v.GetHashCode() : 0,
+                (int? v) => v.HasValue ? v.Value : default));
 
             var uploadsUsed = runtimeEntityType.AddProperty(
                 "UploadsUsed",
