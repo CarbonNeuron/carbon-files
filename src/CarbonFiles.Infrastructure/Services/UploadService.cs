@@ -34,7 +34,8 @@ public sealed class UploadService : IUploadService
         var mimeType = MimeDetector.DetectFromExtension(path);
 
         // Stream content to disk (pipelined: network reads and disk writes run concurrently)
-        var size = await _storage.StoreAsync(bucketId, path, content, maxSize, ct);
+        var result = await _storage.StoreAsync(bucketId, path, content, maxSize, ct);
+        var size = result.Size;
 
         // Check if file already exists
         var existing = await Db.QueryFirstOrDefaultAsync(_db,
