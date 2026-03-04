@@ -483,3 +483,4 @@ $RECYCLE.BIN/
 
 # Generated OpenAPI spec
 openapi.json
+.worktrees/
