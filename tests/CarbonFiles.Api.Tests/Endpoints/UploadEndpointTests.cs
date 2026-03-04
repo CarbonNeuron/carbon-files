@@ -518,4 +518,40 @@ public class UploadEndpointTests : IntegrationTestBase
         file.GetProperty("path").GetString().Should().Be("config/app/settings.json");
         file.GetProperty("name").GetString().Should().Be("settings.json");
     }
+
+    // ── Path Normalization ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Upload_NormalizesBackslashPath()
+    {
+        var client = Fixture.CreateAdminClient();
+        var bucketId = await CreateBucketAsync(client);
+
+        using var form = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("content"));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        form.Add(fileContent, "src\\utils\\helper.cs", "helper.cs");
+        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", form,
+            TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+        var body = await ParseJsonAsync(response);
+        var path = body.GetProperty("uploaded")[0].GetProperty("path").GetString();
+
+        path.Should().Be("src/utils/helper.cs");
+    }
+
+    [Fact]
+    public async Task Upload_PathTraversal_Returns400()
+    {
+        var client = Fixture.CreateAdminClient();
+        var bucketId = await CreateBucketAsync(client);
+
+        using var form = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("content"));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        form.Add(fileContent, "../etc/passwd", "passwd");
+        var response = await client.PostAsync($"/api/buckets/{bucketId}/upload", form,
+            TestContext.Current.CancellationToken);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
 }

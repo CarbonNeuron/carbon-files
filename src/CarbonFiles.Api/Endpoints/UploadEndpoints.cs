@@ -82,7 +82,15 @@ public static class UploadEndpoints
 
                 try
                 {
-                    // Pipelined: network reads and disk writes run concurrently via System.IO.Pipelines
+                    path = CarbonFiles.Core.Utilities.PathNormalizer.Normalize(path);
+                }
+                catch (ArgumentException)
+                {
+                    return ApiResults.BadRequest("Invalid file path");
+                }
+
+                try
+                {
                     var result = await uploadService.StoreFileAsync(id, path, section.Body, auth, maxUploadSize, ctx.RequestAborted);
                     uploaded.Add(result);
                 }
@@ -141,6 +149,15 @@ public static class UploadEndpoints
             var filename = ctx.Request.Query["filename"].FirstOrDefault();
             if (string.IsNullOrEmpty(filename))
                 return ApiResults.BadRequest("filename query parameter is required");
+
+            try
+            {
+                filename = CarbonFiles.Core.Utilities.PathNormalizer.Normalize(filename);
+            }
+            catch (ArgumentException)
+            {
+                return ApiResults.BadRequest("Invalid file path");
+            }
 
             var maxUploadSize = options.Value.MaxUploadSize;
 

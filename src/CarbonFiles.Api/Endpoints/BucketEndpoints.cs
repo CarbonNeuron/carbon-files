@@ -63,10 +63,11 @@ public static class BucketEndpoints
         .WithSummary("List buckets")
         .WithDescription("Auth: API key owner or admin. Returns a paginated list of buckets. Admin sees all; API key sees own buckets only.");
 
-        // GET /api/buckets/{id} — Get bucket with files (public access)
-        group.MapGet("/{id}", async (string id, IBucketService svc) =>
+        // GET /api/buckets/{id} — Get bucket detail (public access)
+        group.MapGet("/{id}", async (string id, IBucketService svc, string? include) =>
         {
-            var result = await svc.GetByIdAsync(id);
+            var includeFiles = string.Equals(include, "files", StringComparison.OrdinalIgnoreCase);
+            var result = await svc.GetByIdAsync(id, includeFiles);
             return result != null
                 ? Results.Ok(result)
                 : ApiResults.NotFound("Bucket not found");
@@ -74,7 +75,7 @@ public static class BucketEndpoints
         .Produces<BucketDetailResponse>(200)
         .Produces<ErrorResponse>(404)
         .WithSummary("Get bucket")
-        .WithDescription("Public. Returns bucket details including file list.");
+        .WithDescription("Public. Returns bucket details. Use ?include=files to include file list.");
 
         // PATCH /api/buckets/{id} — Update bucket (owner or admin)
         group.MapPatch("/{id}", async (string id, UpdateBucketRequest request, HttpContext ctx, IBucketService svc, ILoggerFactory loggerFactory) =>

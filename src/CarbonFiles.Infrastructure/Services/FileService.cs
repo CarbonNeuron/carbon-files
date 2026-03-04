@@ -522,6 +522,54 @@ public sealed class FileService : IFileService
         }
     }
 
+    public async Task<VerifyResponse?> VerifyAsync(string bucketId, string path)
+    {
+        var entity = await Db.QueryFirstOrDefaultAsync(_db,
+            "SELECT * FROM Files WHERE BucketId = @bucketId AND Path = @path",
+            p =>
+            {
+                p.AddWithValue("@bucketId", bucketId);
+                p.AddWithValue("@path", path);
+            },
+            FileEntity.Read);
+        if (entity?.ContentHash == null)
+            return null;
+
+        var contentObj = await Db.QueryFirstOrDefaultAsync(_db,
+            "SELECT * FROM ContentObjects WHERE Hash = @hash",
+            p => p.AddWithValue("@hash", entity.ContentHash),
+            ContentObjectEntity.Read);
+        if (contentObj == null)
+            return null;
+
+        var fullPath = _contentStorage.GetFullPath(contentObj.DiskPath);
+        if (!File.Exists(fullPath))
+            return new VerifyResponse
+            {
+                Path = path,
+                StoredHash = entity.ContentHash,
+                ComputedHash = "",
+                Valid = false
+            };
+
+        using var stream = File.OpenRead(fullPath);
+        using var sha256 = System.Security.Cryptography.IncrementalHash.CreateHash(
+            System.Security.Cryptography.HashAlgorithmName.SHA256);
+        var buffer = new byte[81920];
+        int bytesRead;
+        while ((bytesRead = await stream.ReadAsync(buffer)) > 0)
+            sha256.AppendData(buffer.AsSpan(0, bytesRead));
+        var computedHash = Convert.ToHexStringLower(sha256.GetHashAndReset());
+
+        return new VerifyResponse
+        {
+            Path = path,
+            StoredHash = entity.ContentHash,
+            ComputedHash = computedHash,
+            Valid = entity.ContentHash == computedHash
+        };
+    }
+
     private static async Task<(string TempPath, long Size, string Hash)> ApplyPatchToTempAsync(
         string originalPath, Stream patchContent, long offset, bool append)
     {

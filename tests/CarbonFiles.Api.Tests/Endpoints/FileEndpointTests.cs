@@ -466,4 +466,37 @@ public class FileEndpointTests : IntegrationTestBase
 
         json2.GetProperty("files").GetArrayLength().Should().Be(2);
     }
+
+    // ── Verify Endpoint ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task VerifyFile_ValidContent_ReturnsValid()
+    {
+        var client = Fixture.CreateAdminClient();
+        var bucketId = await CreateBucketAsync(client);
+        await UploadFileAsync(client, bucketId, "test.txt", "verify me");
+
+        var response = await client.GetAsync(
+            $"/api/buckets/{bucketId}/files/test.txt/verify",
+            TestContext.Current.CancellationToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await ParseJsonAsync(response);
+
+        json.GetProperty("path").GetString().Should().Be("test.txt");
+        json.GetProperty("valid").GetBoolean().Should().BeTrue();
+        json.GetProperty("stored_hash").GetString()
+            .Should().Be(json.GetProperty("computed_hash").GetString());
+    }
+
+    [Fact]
+    public async Task VerifyFile_NonexistentFile_Returns404()
+    {
+        var client = Fixture.CreateAdminClient();
+        var bucketId = await CreateBucketAsync(client);
+
+        var response = await client.GetAsync(
+            $"/api/buckets/{bucketId}/files/nope.txt/verify",
+            TestContext.Current.CancellationToken);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 }

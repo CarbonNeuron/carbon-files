@@ -52,7 +52,7 @@ public static class FileEndpoints
         app.MapGet("/api/buckets/{id}/ls", async (string id, IFileService fileService, IBucketService bucketService,
             string path = "", int limit = 200, int offset = 0, string sort = "name", string order = "asc") =>
         {
-            var bucket = await bucketService.GetByIdAsync(id);
+            var bucket = await bucketService.GetBucketAsync(id);
             if (bucket == null)
                 return ApiResults.NotFound("Bucket not found");
 
@@ -66,12 +66,12 @@ public static class FileEndpoints
         .WithSummary("List directory contents")
         .WithDescription("Public. Returns files and folder names at a specific path level within the bucket.");
 
-        // GET|HEAD /api/buckets/{id}/files/{*filePath} — File metadata or content download
+        // GET|HEAD /api/buckets/{id}/files/{*filePath} — File metadata, content download, or verify
         app.MapMethods("/api/buckets/{id}/files/{*filePath}", new[] { "GET", "HEAD" },
             async (string id, string filePath, HttpContext ctx,
             IFileService fileService, FileStorageService storageService, IBucketService bucketService) =>
         {
-            var bucket = await bucketService.GetByIdAsync(id);
+            var bucket = await bucketService.GetBucketAsync(id);
             if (bucket == null)
                 return ApiResults.NotFound("Bucket not found");
 
@@ -80,6 +80,13 @@ public static class FileEndpoints
                 var actualPath = filePath[..^"/content".Length];
                 var contentStorageService = ctx.RequestServices.GetRequiredService<ContentStorageService>();
                 return await ServeFileContent(id, actualPath, ctx, fileService, storageService, contentStorageService);
+            }
+
+            if (filePath.EndsWith("/verify", StringComparison.OrdinalIgnoreCase))
+            {
+                var actualPath = filePath[..^"/verify".Length];
+                var verifyResult = await fileService.VerifyAsync(id, actualPath);
+                return verifyResult == null ? ApiResults.NotFound("File not found") : Results.Ok(verifyResult);
             }
 
             var meta = await fileService.GetMetadataAsync(id, filePath);
@@ -101,7 +108,7 @@ public static class FileEndpoints
             IFileService fileService, IBucketService bucketService, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.FileEndpoints");
-            var bucket = await bucketService.GetByIdAsync(id);
+            var bucket = await bucketService.GetBucketAsync(id);
             if (bucket == null)
                 return ApiResults.NotFound("Bucket not found");
 
@@ -132,7 +139,7 @@ public static class FileEndpoints
 
             var actualPath = filePath[..^"/content".Length];
 
-            var bucket = await bucketService.GetByIdAsync(id);
+            var bucket = await bucketService.GetBucketAsync(id);
             if (bucket == null)
                 return ApiResults.NotFound("Bucket not found");
 
