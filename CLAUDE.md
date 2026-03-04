@@ -91,7 +91,7 @@ Four client SDKs under `clients/`:
 | Language | Package | Generator | Dir |
 |---|---|---|---|
 | TypeScript | `@carbonfiles/client` (npm) | Hey API (`@hey-api/openapi-ts`) | `clients/typescript/` |
-| C# | `CarbonFiles.Client` (NuGet) | Refitter (MSBuild) | `clients/csharp/` |
+| C# | `CarbonFiles.Client` (NuGet) | Hand-crafted | `clients/csharp/` |
 | Python | `carbonfiles-client` (PyPI) | openapi-python-client | `clients/python/` |
 | PowerShell | `CarbonFiles` (PSGallery) | Hand-crafted | `clients/powershell/` |
 
@@ -101,8 +101,8 @@ Four client SDKs under `clients/`:
 ./scripts/export-openapi.sh openapi.json
 # TypeScript
 cp openapi.json clients/typescript/ && cd clients/typescript && npm run generate && npm run build
-# C#
-cp openapi.json clients/csharp/ && dotnet build clients/csharp/ -c Release
+# C# (hand-crafted, no generation needed — just build)
+dotnet build clients/csharp/ -c Release
 # Python
 cp openapi.json clients/python/ && clients/python/generate.sh
 ```

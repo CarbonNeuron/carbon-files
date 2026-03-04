@@ -1,6 +1,6 @@
 # CarbonFiles.Client
 
-C# client for the [CarbonFiles](https://github.com/CarbonNeuron/carbon-files) file-sharing API. Generated from the OpenAPI spec using [Refitter](https://github.com/christianhelle/refitter) and [Refit](https://github.com/reactiveui/refit).
+Handcrafted C# client for the [CarbonFiles](https://github.com/CarbonNeuron/carbon-files) file-sharing API. Wraps `HttpClient` with a fluent, resource-scoped API featuring upload progress callbacks, cancellation support, and real-time SignalR events.
 
 ## Installation
 
@@ -12,115 +12,146 @@ Targets `net10.0` and `netstandard2.0`.
 
 ## Quick Start
 
-### With dependency injection
-
 ```csharp
 using CarbonFiles.Client;
+using CarbonFiles.Client.Models;
 
-// Register in DI container
-services.AddCarbonFilesClient(new Uri("https://files.example.com"))
-    .ConfigureHttpClient(c =>
-    {
-        c.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", "cf4_your_api_key");
-    });
-```
+var client = new CarbonFilesClient("https://files.example.com", "cf4_your_api_key");
 
-Then inject and use `ICarbonFilesApi`:
-
-```csharp
-public class MyService(ICarbonFilesApi api)
-{
-    public async Task CreateBucketAsync()
-    {
-        var bucket = await api.BucketsPOST(new CreateBucketRequest
-        {
-            Name = "my-bucket",
-            Description = "Project assets",
-            Expires_in = "30d"
-        });
-
-        Console.WriteLine($"Created bucket: {bucket.Id}");
-    }
-}
-```
-
-### Without dependency injection
-
-```csharp
-using CarbonFiles.Client;
-using Refit;
-
-var client = new HttpClient
-{
-    BaseAddress = new Uri("https://files.example.com")
-};
-client.DefaultRequestHeaders.Authorization =
-    new AuthenticationHeaderValue("Bearer", "cf4_your_api_key");
-
-var api = RestService.For<ICarbonFilesApi>(client, new RefitSettings
-{
-    ContentSerializer = new SystemTextJsonContentSerializer(new JsonSerializerOptions
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    })
-});
-
-var bucket = await api.BucketsPOST(new CreateBucketRequest { Name = "my-bucket" });
-```
-
-## Common Operations
-
-### Create a bucket
-
-```csharp
-var bucket = await api.BucketsPOST(new CreateBucketRequest
+// Create a bucket
+var bucket = await client.Buckets.CreateAsync(new CreateBucketRequest
 {
     Name = "my-bucket",
-    Description = "Shared files",
-    Expires_in = "7d"
+    Description = "Project assets",
+    ExpiresIn = "30d"
+});
+
+Console.WriteLine($"Created bucket: {bucket.Id}");
+```
+
+### Bring your own HttpClient
+
+```csharp
+var client = new CarbonFilesClient(new CarbonFilesClientOptions
+{
+    BaseAddress = new Uri("https://files.example.com"),
+    ApiKey = "cf4_your_api_key",
+    HttpClient = myHttpClient,       // optional
+    JsonOptions = myJsonOptions      // optional
 });
 ```
 
-### Upload a file
+## Fluent API
+
+All operations are organized as a resource tree accessed via properties and indexers:
 
 ```csharp
-var result = await api.Upload("bucket-id");
+// Buckets
+var buckets = await client.Buckets.ListAsync();
+var detail = await client.Buckets["bucket-id"].GetAsync();
+await client.Buckets["bucket-id"].DeleteAsync();
+
+// Files within a bucket
+var files = await client.Buckets["bucket-id"].Files.ListAsync();
+var metadata = await client.Buckets["bucket-id"].Files["path/to/file.txt"].GetMetadataAsync();
+var stream = await client.Buckets["bucket-id"].Files["path/to/file.txt"].DownloadAsync();
+
+// Admin operations
+var key = await client.Keys.CreateAsync(new CreateApiKeyRequest { Name = "ci-agent" });
+var stats = await client.Stats.GetAsync();
+var usage = await client.Keys["cf4_prefix"].GetUsageAsync();
 ```
 
-### List files in a bucket
+## Upload with Progress
 
 ```csharp
-var files = await api.FilesGET("bucket-id", limit: 50, offset: 0);
-foreach (var file in files.Items)
+using var fileStream = File.OpenRead("photo.jpg");
+
+var result = await client.Buckets["bucket-id"].Files.UploadAsync(
+    fileStream,
+    "photo.jpg",
+    progress: new Progress<UploadProgress>(p =>
+        Console.WriteLine($"{p.BytesSent}/{p.TotalBytes} bytes ({p.Percentage}%)")),
+    ct: cancellationToken);
+
+Console.WriteLine($"Uploaded: {result.Uploaded[0].Path}");
+```
+
+### Upload with token
+
+```csharp
+await client.Buckets["bucket-id"].Files.UploadAsync(
+    stream, "file.txt",
+    uploadToken: "cfu_your_upload_token");
+```
+
+## Real-Time Events (SignalR)
+
+```csharp
+// Register event handlers
+client.Events.OnFileCreated((bucketId, file) =>
 {
-    Console.WriteLine($"{file.Name} ({file.Size} bytes)");
-}
+    Console.WriteLine($"New file in {bucketId}: {file.Name}");
+    return Task.CompletedTask;
+});
+
+client.Events.OnBucketDeleted(bucketId =>
+{
+    Console.WriteLine($"Bucket deleted: {bucketId}");
+    return Task.CompletedTask;
+});
+
+// Connect and subscribe
+await client.Events.ConnectAsync();
+await client.Events.SubscribeToBucketAsync("bucket-id");
+
+// Later...
+await client.Events.DisconnectAsync();
 ```
 
-### Get bucket details
+Available events: `OnFileCreated`, `OnFileUpdated`, `OnFileDeleted`, `OnBucketCreated`, `OnBucketUpdated`, `OnBucketDeleted`.
+
+## File Operations
 
 ```csharp
-var detail = await api.BucketsGET2("bucket-id");
-Console.WriteLine($"Bucket: {detail.Name}, Files: {detail.Files.Count}");
-```
+var bucket = client.Buckets["bucket-id"];
 
-### Delete a bucket
+// List files (paginated)
+var files = await bucket.Files.ListAsync(new PaginationOptions { Limit = 20 });
 
-```csharp
-await api.BucketsDELETE("bucket-id");
-```
+// Directory listing
+var dir = await bucket.Files.ListDirectoryAsync("docs/");
 
-### Download bucket as ZIP
+// Download
+var stream = await bucket.Files["readme.md"].DownloadAsync();
 
-```csharp
-var zipStream = await api.ZipGET("bucket-id");
+// Delete
+await bucket.Files["old-file.txt"].DeleteAsync();
+
+// Append to file
+await bucket.Files["log.txt"].AppendAsync(appendStream);
+
+// Patch with byte range
+await bucket.Files["data.bin"].PatchAsync(patchStream, rangeStart: 0, rangeEnd: 99, totalSize: 1000);
+
+// Bucket summary (plaintext)
+var summary = await bucket.GetSummaryAsync();
+
+// Download entire bucket as ZIP
+var zip = await bucket.DownloadZipAsync();
 ```
 
 ## Authentication
 
-CarbonFiles supports four token types, all passed as Bearer tokens:
+Pass the token when constructing the client:
+
+```csharp
+// API key
+var client = new CarbonFilesClient("https://files.example.com", "cf4_your_api_key");
+
+// Admin key
+var client = new CarbonFilesClient("https://files.example.com", "your-admin-key");
+```
 
 | Type | Format | Scope |
 |------|--------|-------|
@@ -129,63 +160,96 @@ CarbonFiles supports four token types, all passed as Bearer tokens:
 | Dashboard JWT | JWT token | Admin-level, 24h max |
 | Upload token | `cfu_` prefix | Single bucket |
 
-Set the token on the HttpClient:
+## Error Handling
+
+API errors throw `CarbonFilesException`:
 
 ```csharp
-services.AddCarbonFilesClient(new Uri("https://files.example.com"))
-    .ConfigureHttpClient(c =>
-    {
-        c.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", "cf4_your_api_key");
-    });
-```
-
-To switch tokens at runtime, use a `DelegatingHandler`:
-
-```csharp
-public class AuthHandler(ITokenProvider tokens) : DelegatingHandler
+try
 {
-    protected override async Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        request.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", await tokens.GetTokenAsync());
-        return await base.SendAsync(request, cancellationToken);
-    }
+    await client.Buckets["nonexistent"].GetAsync();
 }
-
-services.AddCarbonFilesClient(new Uri("https://files.example.com"))
-    .AddHttpMessageHandler<AuthHandler>();
+catch (CarbonFilesException ex)
+{
+    Console.WriteLine($"HTTP {(int)ex.StatusCode}: {ex.Error}");
+    if (ex.Hint != null)
+        Console.WriteLine($"Hint: {ex.Hint}");
+}
 ```
 
-## API Methods
+## API Reference
 
+### `client.Buckets`
 | Method | Description |
 |--------|-------------|
-| `Healthz()` | Health check |
-| `BucketsPOST(body)` | Create bucket |
-| `BucketsGET(...)` | List buckets |
-| `BucketsGET2(id)` | Get bucket details |
-| `BucketsPATCH(id, body)` | Update bucket |
-| `BucketsDELETE(id)` | Delete bucket |
-| `Summary(id)` | Bucket summary (plaintext) |
-| `ZipGET(id)` | Download bucket as ZIP |
-| `FilesGET(id, ...)` | List files |
-| `FilesGET2(id, filePath)` | Get file |
-| `FilesDELETE(id, filePath)` | Delete file |
-| `FilesPATCH(id, filePath)` | Patch file |
-| `Upload(id)` | Upload files (multipart) |
-| `Stream(id)` | Stream upload |
-| `S(code)` | Resolve short URL |
-| `Short(code)` | Delete short URL |
-| `KeysPOST(body)` | Create API key |
-| `KeysGET(...)` | List API keys |
-| `KeysDELETE(prefix)` | Revoke API key |
-| `Usage(prefix)` | API key usage stats |
-| `Tokens(id, body)` | Create upload token |
-| `Dashboard(body)` | Create dashboard token |
-| `Me()` | Validate dashboard token |
-| `Stats()` | System statistics |
+| `.CreateAsync(request)` | Create bucket |
+| `.ListAsync(pagination?, includeExpired?)` | List buckets |
+| `["id"].GetAsync()` | Get bucket details |
+| `["id"].UpdateAsync(request)` | Update bucket |
+| `["id"].DeleteAsync()` | Delete bucket |
+| `["id"].GetSummaryAsync()` | Plaintext summary |
+| `["id"].DownloadZipAsync()` | Download as ZIP |
+
+### `client.Buckets["id"].Files`
+| Method | Description |
+|--------|-------------|
+| `.ListAsync(pagination?)` | List files |
+| `.ListDirectoryAsync(path?, pagination?)` | Directory listing |
+| `.UploadAsync(stream, filename, progress?, uploadToken?)` | Stream upload |
+| `["path"].GetMetadataAsync()` | File metadata |
+| `["path"].DownloadAsync()` | Download file |
+| `["path"].DeleteAsync()` | Delete file |
+| `["path"].PatchAsync(stream, start, end, total)` | Byte-range patch |
+| `["path"].AppendAsync(stream)` | Append to file |
+
+### `client.Buckets["id"].Tokens`
+| Method | Description |
+|--------|-------------|
+| `.CreateAsync(request)` | Create upload token |
+
+### `client.Keys`
+| Method | Description |
+|--------|-------------|
+| `.CreateAsync(request)` | Create API key |
+| `.ListAsync(pagination?)` | List API keys |
+| `["prefix"].RevokeAsync()` | Revoke API key |
+| `["prefix"].GetUsageAsync()` | Usage stats |
+
+### `client.Dashboard`
+| Method | Description |
+|--------|-------------|
+| `.CreateTokenAsync(request?)` | Create dashboard token |
+| `.GetCurrentUserAsync()` | Validate current token |
+
+### `client.Stats`
+| Method | Description |
+|--------|-------------|
+| `.GetAsync()` | System statistics |
+
+### `client.ShortUrls`
+| Method | Description |
+|--------|-------------|
+| `["code"].DeleteAsync()` | Delete short URL |
+
+### `client.Health`
+| Method | Description |
+|--------|-------------|
+| `.CheckAsync()` | Health check |
+
+### `client.Events`
+| Method | Description |
+|--------|-------------|
+| `.ConnectAsync()` | Connect to SignalR hub |
+| `.DisconnectAsync()` | Disconnect |
+| `.SubscribeToBucketAsync(id)` | Subscribe to bucket events |
+| `.SubscribeToFileAsync(id, path)` | Subscribe to file events |
+| `.SubscribeToAllAsync()` | Subscribe to all (admin) |
+| `.OnFileCreated(handler)` | File created event |
+| `.OnFileUpdated(handler)` | File updated event |
+| `.OnFileDeleted(handler)` | File deleted event |
+| `.OnBucketCreated(handler)` | Bucket created event |
+| `.OnBucketUpdated(handler)` | Bucket updated event |
+| `.OnBucketDeleted(handler)` | Bucket deleted event |
 
 ## Links
 
