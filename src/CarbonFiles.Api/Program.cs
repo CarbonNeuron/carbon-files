@@ -82,6 +82,7 @@ builder.Services.AddOpenApi(options =>
     options.AddOperationTransformer((operation, context, ct) =>
     {
         var desc = operation.Description ?? "";
+        var doc = context.Document;
 
         // Public endpoints: explicitly empty security (override any global)
         if (desc.StartsWith("Public", StringComparison.OrdinalIgnoreCase))
@@ -95,27 +96,27 @@ builder.Services.AddOpenApi(options =>
         if (desc.Contains("Admin only", StringComparison.OrdinalIgnoreCase))
         {
             // Admin key or dashboard token
-            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("AdminKey", null)] = new List<string>() });
-            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("DashboardToken", null)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("AdminKey", doc)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("DashboardToken", doc)] = new List<string>() });
         }
         else if (desc.Contains("upload token", StringComparison.OrdinalIgnoreCase))
         {
             // Owner, admin, or upload token
-            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("ApiKey", null)] = new List<string>() });
-            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("AdminKey", null)] = new List<string>() });
-            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("UploadToken", null)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("ApiKey", doc)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("AdminKey", doc)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("UploadToken", doc)] = new List<string>() });
         }
         else if (desc.Contains("Dashboard token", StringComparison.OrdinalIgnoreCase))
         {
             // Dashboard token only
-            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("DashboardToken", null)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("DashboardToken", doc)] = new List<string>() });
         }
         else if (desc.StartsWith("Auth:", StringComparison.OrdinalIgnoreCase))
         {
             // Owner or admin
-            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("ApiKey", null)] = new List<string>() });
-            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("AdminKey", null)] = new List<string>() });
-            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("DashboardToken", null)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("ApiKey", doc)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("AdminKey", doc)] = new List<string>() });
+            security.Add(new() { [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("DashboardToken", doc)] = new List<string>() });
         }
 
         if (security.Count > 0)
