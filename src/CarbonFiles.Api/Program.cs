@@ -11,6 +11,13 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel request body size to match MaxUploadSize (0 = unlimited → null removes the limit)
+var maxUploadSize = builder.Configuration.GetValue<long>("CarbonFiles:MaxUploadSize");
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Limits.MaxRequestBodySize = maxUploadSize > 0 ? maxUploadSize : null;
+});
+
 // JSON serialization for AOT
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
