@@ -1,6 +1,6 @@
 # ⚡ CarbonFiles
 
-A fast, lightweight file-sharing API with bucket-based organization, API key authentication, and real-time WebSocket events. Part of the [Carbungo](https://github.com/carbungo) platform.
+A fast, lightweight file-sharing API with bucket-based organization, API key authentication, and real-time real-time SignalR events. Part of the [Carbungo](https://github.com/carbungo) platform.
 
 Built with ASP.NET Minimal API on .NET 10. Designed to be self-hosted, single-binary, and fast by default.
 
@@ -16,7 +16,7 @@ The API is available at `http://localhost:8080`. Set your admin key via the `Car
 
 - **Bucket-based storage** — organize files into buckets with optional expiration
 - **Multi-auth** — admin keys, scoped API keys (`cf4_`), upload tokens (`cfu_`), dashboard JWTs
-- **Real-time events** — WebSocket notifications for file and bucket changes
+- **Real-time events** — SignalR notifications for file and bucket changes
 - **Short URLs** — shareable links to any file
 - **ZIP downloads** — download entire buckets as archives
 - **Stream uploads** — PUT large files without multipart overhead
@@ -54,21 +54,21 @@ curl -L http://localhost:8080/s/xK9mQ2
 curl http://localhost:8080/api/buckets/$BUCKET_ID/summary
 ```
 
-## Real-Time Events (WebSocket)
+## Real-Time Events (SignalR)
 
-Connect to `/ws/files` for live bucket and file notifications:
+Connect to `/hub/files` for live bucket and file notifications:
 
 ```javascript
-const ws = new WebSocket(`ws://localhost:8080/ws/files?token=${apiKey}`);
+const connection = new signalR.HubConnectionBuilder()
+    .withUrl("/hub/files", { accessTokenFactory: () => token })
+    .withAutomaticReconnect()
+    .build();
 
-ws.onmessage = (event) => {
-  const msg = JSON.parse(event.data);
-  // msg.type: FileCreated | FileUpdated | FileDeleted | BucketCreated | BucketUpdated | BucketDeleted
-  console.log(msg.type, msg.data);
-};
+connection.on("FileCreated", (bucketId, file) => { /* ... */ });
+connection.on("BucketUpdated", (bucketId, changes) => { /* ... */ });
 
-// Subscribe to a specific bucket
-ws.send(JSON.stringify({ action: "subscribe", bucket_id: "abc123" }));
+await connection.start();
+await connection.invoke("SubscribeToBucket", bucketId);
 ```
 
 ## Configuration
@@ -92,7 +92,7 @@ Clients (curl, frontend, SDK, LLM agents)
               ▼
 ┌──────────────────────────────┐
 │       CarbonFiles.Api        │
-│  Endpoints │ Auth │ WS Hub   │
+│  Endpoints │ Auth │ SignalR   │
 ├──────────────────────────────┤
 │   CarbonFiles.Infrastructure │
 │  Services │ Dapper │ Storage  │
