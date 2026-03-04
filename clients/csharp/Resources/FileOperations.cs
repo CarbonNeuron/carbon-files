@@ -78,13 +78,13 @@ public class FileOperations
 
         var sb = new StringBuilder(path);
         var first = true;
-        foreach (var (key, value) in query)
+        foreach (var kvp in query)
         {
-            if (value == null) continue;
+            if (kvp.Value == null) continue;
             sb.Append(first ? '?' : '&');
-            sb.Append(Uri.EscapeDataString(key));
+            sb.Append(Uri.EscapeDataString(kvp.Key));
             sb.Append('=');
-            sb.Append(Uri.EscapeDataString(value));
+            sb.Append(Uri.EscapeDataString(kvp.Value));
             first = false;
         }
         return sb.ToString();
