@@ -59,7 +59,8 @@ public static class FileEndpoints
             if (filePath.EndsWith("/content", StringComparison.OrdinalIgnoreCase))
             {
                 var actualPath = filePath[..^"/content".Length];
-                return await ServeFileContent(id, actualPath, ctx, fileService, storageService);
+                var contentStorageService = ctx.RequestServices.GetRequiredService<ContentStorageService>();
+                return await ServeFileContent(id, actualPath, ctx, fileService, storageService, contentStorageService);
             }
 
             var meta = await fileService.GetMetadataAsync(id, filePath);
@@ -157,11 +158,9 @@ public static class FileEndpoints
                     return ApiResults.Error("Range not satisfiable", 416);
             }
 
-            var newSize = await storageService.PatchFileAsync(id, actualPath, ctx.Request.Body, offset, isAppend);
-            if (newSize < 0)
+            var patched = await fileService.PatchFileAsync(id, actualPath, ctx.Request.Body, offset, isAppend);
+            if (!patched)
                 return Results.NotFound();
-
-            await fileService.UpdateFileSizeAsync(id, actualPath, newSize);
 
             logger.LogInformation("File {FilePath} patched in bucket {BucketId}", actualPath, id);
             return Results.Ok(await fileService.GetMetadataAsync(id, actualPath));
@@ -177,13 +176,27 @@ public static class FileEndpoints
     }
 
     private static async Task<IResult> ServeFileContent(string bucketId, string path, HttpContext ctx,
-        IFileService fileService, FileStorageService storageService)
+        IFileService fileService, FileStorageService storageService, ContentStorageService contentStorageService)
     {
         var meta = await fileService.GetMetadataAsync(bucketId, path);
         if (meta == null)
             return ApiResults.NotFound("File not found");
 
-        var etag = $"\"{meta.Size}-{meta.UpdatedAt.Ticks}\"";
+        string physicalPath;
+        string etag;
+        if (meta.Sha256 != null)
+        {
+            var diskPath = await fileService.GetContentDiskPathAsync(bucketId, path);
+            if (diskPath == null) return ApiResults.NotFound("File not found");
+            physicalPath = contentStorageService.GetFullPath(diskPath);
+            etag = $"\"{meta.Sha256}\"";
+        }
+        else
+        {
+            physicalPath = storageService.GetFilePath(bucketId, path);
+            etag = $"\"{meta.Size}-{meta.UpdatedAt.Ticks}\"";
+        }
+
         var lastModified = meta.UpdatedAt;
 
         if (ctx.Request.Headers.IfNoneMatch.FirstOrDefault() == etag)
@@ -198,7 +211,6 @@ public static class FileEndpoints
             }
         }
 
-        var physicalPath = storageService.GetFilePath(bucketId, path);
         if (!System.IO.File.Exists(physicalPath))
             return ApiResults.NotFound("File not found");
 

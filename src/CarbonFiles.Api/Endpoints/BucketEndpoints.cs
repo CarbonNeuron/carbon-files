@@ -150,7 +150,7 @@ public static class BucketEndpoints
         .WithDescription("Public. Returns a plaintext summary of the bucket suitable for LLM context or previews.");
 
         // GET|HEAD /api/buckets/{id}/zip — Download bucket as ZIP (public access)
-        group.MapMethods("/{id}/zip", new[] { "GET", "HEAD" }, async (string id, HttpContext ctx, IBucketService svc, FileStorageService storage, ILoggerFactory loggerFactory) =>
+        group.MapMethods("/{id}/zip", new[] { "GET", "HEAD" }, async (string id, HttpContext ctx, IBucketService svc, FileStorageService storage, ContentStorageService contentStorage, IFileService fileService, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.BucketEndpoints");
             var bucket = await svc.GetBucketAsync(id);
@@ -202,9 +202,24 @@ public static class BucketEndpoints
                 var entryPath = file.Path.Replace('\\', '/');
                 var entry = archive.CreateEntry(entryPath, CompressionLevel.Fastest);
                 await using var entryStream = entry.Open();
-                await using var fileStream = storage.OpenRead(id, file.Path);
+
+                FileStream? fileStream = null;
+                if (file.Sha256 != null)
+                {
+                    var diskPath = await fileService.GetContentDiskPathAsync(id, file.Path);
+                    if (diskPath != null)
+                        fileStream = contentStorage.OpenRead(diskPath);
+                }
+                else
+                {
+                    fileStream = storage.OpenRead(id, file.Path);
+                }
+
                 if (fileStream != null)
-                    await fileStream.CopyToAsync(entryStream);
+                {
+                    await using (fileStream)
+                        await fileStream.CopyToAsync(entryStream);
+                }
             }
 
             return Results.Empty;

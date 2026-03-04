@@ -13,14 +13,17 @@ public sealed class FileService : IFileService
 {
     private readonly IDbConnection _db;
     private readonly FileStorageService _storage;
+    private readonly ContentStorageService _contentStorage;
     private readonly INotificationService _notifications;
     private readonly ICacheService _cache;
     private readonly ILogger<FileService> _logger;
 
-    public FileService(IDbConnection db, FileStorageService storage, INotificationService notifications, ICacheService cache, ILogger<FileService> logger)
+    public FileService(IDbConnection db, FileStorageService storage, ContentStorageService contentStorage,
+        INotificationService notifications, ICacheService cache, ILogger<FileService> logger)
     {
         _db = db;
         _storage = storage;
+        _contentStorage = contentStorage;
         _notifications = notifications;
         _cache = cache;
         _logger = logger;
@@ -178,6 +181,24 @@ public sealed class FileService : IFileService
         return file;
     }
 
+    public async Task<string?> GetContentDiskPathAsync(string bucketId, string path)
+    {
+        var hash = await Db.ExecuteScalarAsync<string?>(_db,
+            "SELECT ContentHash FROM Files WHERE BucketId = @bucketId AND Path = @path",
+            p =>
+            {
+                p.AddWithValue("@bucketId", bucketId);
+                p.AddWithValue("@path", path);
+            });
+        if (hash == null) return null;
+
+        var diskPath = await Db.ExecuteScalarAsync<string?>(_db,
+            "SELECT DiskPath FROM ContentObjects WHERE Hash = @hash",
+            p => p.AddWithValue("@hash", hash));
+
+        return diskPath;
+    }
+
     public async Task<bool> DeleteAsync(string bucketId, string path, AuthContext auth)
     {
         // Check bucket ownership
@@ -230,10 +251,21 @@ public sealed class FileService : IFileService
                 p.AddWithValue("@path", path);
             }, tx);
 
+        // Decrement content ref count for CAS files
+        if (entity.ContentHash != null)
+        {
+            await Db.ExecuteAsync(_db,
+                "UPDATE ContentObjects SET RefCount = RefCount - 1 WHERE Hash = @hash",
+                p => p.AddWithValue("@hash", entity.ContentHash), tx);
+        }
+
         tx.Commit();
 
-        // Delete from disk
-        _storage.DeleteFile(bucketId, path);
+        // Only delete old per-bucket disk file for pre-migration files
+        if (entity.ContentHash == null)
+        {
+            _storage.DeleteFile(bucketId, path);
+        }
 
         _logger.LogInformation("Deleted file {Path} from bucket {BucketId}", path, bucketId);
 
@@ -302,5 +334,177 @@ public sealed class FileService : IFileService
         _logger.LogDebug("Updated file size for {Path} in bucket {BucketId}: {OldSize} -> {NewSize}", path, bucketId, oldSize, newSize);
 
         return true;
+    }
+
+    public async Task<bool> PatchFileAsync(string bucketId, string path, Stream patchContent, long offset, bool append)
+    {
+        var entity = await Db.QueryFirstOrDefaultAsync(_db,
+            "SELECT * FROM Files WHERE BucketId = @bucketId AND Path = @path",
+            p =>
+            {
+                p.AddWithValue("@bucketId", bucketId);
+                p.AddWithValue("@path", path);
+            },
+            FileEntity.Read);
+        if (entity?.ContentHash == null) return false;
+
+        var contentObj = await Db.QueryFirstOrDefaultAsync(_db,
+            "SELECT * FROM ContentObjects WHERE Hash = @hash",
+            p => p.AddWithValue("@hash", entity.ContentHash),
+            ContentObjectEntity.Read);
+        if (contentObj == null) return false;
+
+        // Read original content, apply patch, write to new temp, hash result
+        var originalPath = _contentStorage.GetFullPath(contentObj.DiskPath);
+        var (tempPath, newSize, newHash) = await ApplyPatchToTempAsync(originalPath, patchContent, offset, append);
+
+        try
+        {
+            var now = DateTime.UtcNow;
+            var oldHash = entity.ContentHash;
+
+            using var tx = _db.BeginTransaction();
+
+            // Check if new content already exists
+            var existingNew = await Db.QueryFirstOrDefaultAsync(_db,
+                "SELECT * FROM ContentObjects WHERE Hash = @hash",
+                p => p.AddWithValue("@hash", newHash),
+                ContentObjectEntity.Read);
+
+            if (existingNew != null)
+            {
+                File.Delete(tempPath);
+                await Db.ExecuteAsync(_db,
+                    "UPDATE ContentObjects SET RefCount = RefCount + 1 WHERE Hash = @hash",
+                    p => p.AddWithValue("@hash", newHash), tx);
+            }
+            else
+            {
+                var diskPath = ContentStorageService.ComputeDiskPath(newHash);
+                _contentStorage.MoveToContentStore(tempPath, diskPath);
+                await Db.ExecuteAsync(_db,
+                    "INSERT INTO ContentObjects (Hash, Size, DiskPath, RefCount, CreatedAt) VALUES (@hash, @size, @diskPath, 1, @now)",
+                    p =>
+                    {
+                        p.AddWithValue("@hash", newHash);
+                        p.AddWithValue("@size", newSize);
+                        p.AddWithValue("@diskPath", diskPath);
+                        p.AddWithValue("@now", now);
+                    }, tx);
+            }
+
+            // Decrement old content ref
+            if (oldHash != newHash)
+            {
+                await Db.ExecuteAsync(_db,
+                    "UPDATE ContentObjects SET RefCount = RefCount - 1 WHERE Hash = @oldHash",
+                    p => p.AddWithValue("@oldHash", oldHash), tx);
+            }
+
+            // Update file record
+            await Db.ExecuteAsync(_db,
+                "UPDATE Files SET Size = @size, ContentHash = @hash, UpdatedAt = @now WHERE BucketId = @bucketId AND Path = @path",
+                p =>
+                {
+                    p.AddWithValue("@size", newSize);
+                    p.AddWithValue("@hash", newHash);
+                    p.AddWithValue("@now", now);
+                    p.AddWithValue("@bucketId", bucketId);
+                    p.AddWithValue("@path", path);
+                }, tx);
+
+            // Update bucket size
+            await Db.ExecuteAsync(_db,
+                "UPDATE Buckets SET TotalSize = MAX(0, TotalSize - @oldSize + @newSize) WHERE Id = @bucketId",
+                p =>
+                {
+                    p.AddWithValue("@oldSize", entity.Size);
+                    p.AddWithValue("@newSize", newSize);
+                    p.AddWithValue("@bucketId", bucketId);
+                }, tx);
+
+            tx.Commit();
+
+            _cache.InvalidateFile(bucketId, path);
+            _cache.InvalidateBucket(bucketId);
+            _cache.InvalidateStats();
+
+            return true;
+        }
+        catch
+        {
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+            throw;
+        }
+    }
+
+    private static async Task<(string TempPath, long Size, string Hash)> ApplyPatchToTempAsync(
+        string originalPath, Stream patchContent, long offset, bool append)
+    {
+        var tempDir = Path.GetTempPath();
+        var tempPath = Path.Combine(tempDir, $"{Guid.NewGuid():N}.tmp");
+
+        using var sha256 = System.Security.Cryptography.IncrementalHash.CreateHash(
+            System.Security.Cryptography.HashAlgorithmName.SHA256);
+
+        await using var outFile = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920);
+        await using var inFile = new FileStream(originalPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920);
+
+        var buffer = new byte[81920];
+        long totalBytes = 0;
+
+        if (append)
+        {
+            int read;
+            while ((read = await inFile.ReadAsync(buffer)) > 0)
+            {
+                sha256.AppendData(buffer.AsSpan(0, read));
+                await outFile.WriteAsync(buffer.AsMemory(0, read));
+                totalBytes += read;
+            }
+            while ((read = await patchContent.ReadAsync(buffer)) > 0)
+            {
+                sha256.AppendData(buffer.AsSpan(0, read));
+                await outFile.WriteAsync(buffer.AsMemory(0, read));
+                totalBytes += read;
+            }
+        }
+        else
+        {
+            // Copy up to offset
+            long copied = 0;
+            while (copied < offset)
+            {
+                var toRead = (int)Math.Min(buffer.Length, offset - copied);
+                var read = await inFile.ReadAsync(buffer.AsMemory(0, toRead));
+                if (read == 0) break;
+                sha256.AppendData(buffer.AsSpan(0, read));
+                await outFile.WriteAsync(buffer.AsMemory(0, read));
+                copied += read;
+                totalBytes += read;
+            }
+            // Skip original content at the patch region, write patch content
+            long patchBytes = 0;
+            int patchRead;
+            while ((patchRead = await patchContent.ReadAsync(buffer)) > 0)
+            {
+                sha256.AppendData(buffer.AsSpan(0, patchRead));
+                await outFile.WriteAsync(buffer.AsMemory(0, patchRead));
+                patchBytes += patchRead;
+                totalBytes += patchRead;
+            }
+            // Skip corresponding bytes in original, copy remainder
+            inFile.Seek(offset + patchBytes, SeekOrigin.Begin);
+            int tailRead;
+            while ((tailRead = await inFile.ReadAsync(buffer)) > 0)
+            {
+                sha256.AppendData(buffer.AsSpan(0, tailRead));
+                await outFile.WriteAsync(buffer.AsMemory(0, tailRead));
+                totalBytes += tailRead;
+            }
+        }
+
+        var hashHex = Convert.ToHexStringLower(sha256.GetHashAndReset());
+        return (tempPath, totalBytes, hashHex);
     }
 }

@@ -54,7 +54,7 @@ public static class UploadEndpoints
 
             // Stream sections directly from the request body — no buffering
             var reader = new MultipartReader(boundary, ctx.Request.Body);
-            var uploaded = new List<BucketFile>();
+            var uploaded = new List<UploadedFile>();
             var maxUploadSize = options.Value.MaxUploadSize;
 
             MultipartSection? section;
@@ -144,7 +144,7 @@ public static class UploadEndpoints
 
             var maxUploadSize = options.Value.MaxUploadSize;
 
-            BucketFile result;
+            UploadedFile result;
             try
             {
                 result = await uploadService.StoreFileAsync(id, filename, ctx.Request.Body, auth, maxUploadSize, ctx.RequestAborted);
