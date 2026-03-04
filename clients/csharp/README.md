@@ -116,6 +116,41 @@ await client.Buckets["bucket-id"].Files.UploadAsync(
     uploadToken: "cfu_your_upload_token");
 ```
 
+## Pagination
+
+All list endpoints return a `PaginatedResponse<T>` and accept a `PaginationOptions` input:
+
+```csharp
+// Paginate through buckets
+var page = await client.Buckets.ListAsync(new PaginationOptions
+{
+    Limit = 20,
+    Offset = 0,
+    Sort = "created_at",
+    Order = "desc"
+});
+
+Console.WriteLine($"Showing {page.Items.Count} of {page.Total} buckets");
+
+foreach (var bucket in page.Items)
+    Console.WriteLine($"  {bucket.Id}: {bucket.Name}");
+
+// Next page
+var nextPage = await client.Buckets.ListAsync(new PaginationOptions
+{
+    Limit = 20,
+    Offset = page.Offset + page.Limit
+});
+```
+
+The same pattern applies to all paginated endpoints:
+
+| Method | Returns |
+|--------|---------|
+| `client.Buckets.ListAsync(pagination?)` | `PaginatedResponse<Bucket>` |
+| `client.Buckets["id"].Files.ListAsync(pagination?)` | `PaginatedResponse<BucketFile>` |
+| `client.Keys.ListAsync(pagination?)` | `PaginatedResponse<ApiKeyListItem>` |
+
 ## Real-Time Events (SignalR)
 
 ```csharp
