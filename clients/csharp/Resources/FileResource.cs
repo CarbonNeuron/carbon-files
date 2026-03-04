@@ -22,6 +22,9 @@ public class FileResource
     public Task<BucketFile> GetMetadataAsync(CancellationToken ct = default)
         => _transport.GetAsync<BucketFile>(BasePath, ct);
 
+    public Task<VerifyResponse> VerifyAsync(CancellationToken ct = default)
+        => _transport.GetAsync<VerifyResponse>($"{BasePath}/verify", ct);
+
     public Task<Stream> DownloadAsync(CancellationToken ct = default)
         => _transport.GetStreamAsync($"{BasePath}/content", ct);
 

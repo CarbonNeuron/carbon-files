@@ -33,6 +33,25 @@ public class FileOperations
         return _transport.GetAsync<PaginatedResponse<BucketFile>>(url, ct);
     }
 
+    public Task<FileTreeResponse> ListTreeAsync(
+        string delimiter = "/",
+        string? prefix = null,
+        int? limit = null,
+        string? cursor = null,
+        CancellationToken ct = default)
+    {
+        var query = new Dictionary<string, string?>
+        {
+            ["delimiter"] = delimiter
+        };
+        if (prefix != null) query["prefix"] = prefix;
+        if (limit.HasValue) query["limit"] = limit.Value.ToString();
+        if (cursor != null) query["cursor"] = cursor;
+
+        var url = HttpTransport.BuildUrl($"/api/buckets/{Uri.EscapeDataString(_bucketId)}/files", query);
+        return _transport.GetAsync<FileTreeResponse>(url, ct);
+    }
+
     public Task<DirectoryListingResponse> ListDirectoryAsync(
         string? path = null,
         PaginationOptions? pagination = null,

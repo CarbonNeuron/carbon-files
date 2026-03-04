@@ -23,10 +23,43 @@ public class HealthResponse
     public string Db { get; set; } = "";
 }
 
+public class UploadedFile
+{
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("size")]
+    public long Size { get; set; }
+
+    [JsonPropertyName("mime_type")]
+    public string MimeType { get; set; } = "";
+
+    [JsonPropertyName("short_code")]
+    public string? ShortCode { get; set; }
+
+    [JsonPropertyName("short_url")]
+    public string? ShortUrl { get; set; }
+
+    [JsonPropertyName("sha256")]
+    public string? Sha256 { get; set; }
+
+    [JsonPropertyName("deduplicated")]
+    public bool Deduplicated { get; set; }
+
+    [JsonPropertyName("created_at")]
+    public DateTimeOffset CreatedAt { get; set; }
+
+    [JsonPropertyName("updated_at")]
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 public class UploadResponse
 {
     [JsonPropertyName("uploaded")]
-    public List<BucketFile> Uploaded { get; set; } = new();
+    public List<UploadedFile> Uploaded { get; set; } = new();
 }
 
 public class BucketDetailResponse
@@ -58,6 +91,12 @@ public class BucketDetailResponse
     [JsonPropertyName("total_size")]
     public long TotalSize { get; set; }
 
+    [JsonPropertyName("unique_content_count")]
+    public int UniqueContentCount { get; set; }
+
+    [JsonPropertyName("unique_content_size")]
+    public long UniqueContentSize { get; set; }
+
     [JsonPropertyName("files")]
     public List<BucketFile> Files { get; set; } = new();
 
@@ -84,6 +123,57 @@ public class DirectoryListingResponse
 
     [JsonPropertyName("offset")]
     public int Offset { get; set; }
+}
+
+public class FileTreeResponse
+{
+    [JsonPropertyName("prefix")]
+    public string? Prefix { get; set; }
+
+    [JsonPropertyName("delimiter")]
+    public string Delimiter { get; set; } = "";
+
+    [JsonPropertyName("directories")]
+    public List<DirectoryEntry> Directories { get; set; } = new();
+
+    [JsonPropertyName("files")]
+    public List<BucketFile> Files { get; set; } = new();
+
+    [JsonPropertyName("total_files")]
+    public int TotalFiles { get; set; }
+
+    [JsonPropertyName("total_directories")]
+    public int TotalDirectories { get; set; }
+
+    [JsonPropertyName("cursor")]
+    public string? Cursor { get; set; }
+}
+
+public class DirectoryEntry
+{
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
+
+    [JsonPropertyName("file_count")]
+    public int FileCount { get; set; }
+
+    [JsonPropertyName("total_size")]
+    public long TotalSize { get; set; }
+}
+
+public class VerifyResponse
+{
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
+
+    [JsonPropertyName("stored_hash")]
+    public string StoredHash { get; set; } = "";
+
+    [JsonPropertyName("computed_hash")]
+    public string ComputedHash { get; set; } = "";
+
+    [JsonPropertyName("valid")]
+    public bool Valid { get; set; }
 }
 
 public class ApiKeyResponse

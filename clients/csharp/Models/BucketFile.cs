@@ -22,6 +22,9 @@ public class BucketFile
     [JsonPropertyName("short_url")]
     public string? ShortUrl { get; set; }
 
+    [JsonPropertyName("sha256")]
+    public string? Sha256 { get; set; }
+
     [JsonPropertyName("created_at")]
     public DateTimeOffset CreatedAt { get; set; }
 

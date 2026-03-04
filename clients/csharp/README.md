@@ -188,6 +188,15 @@ var files = await bucket.Files.ListAsync(new PaginationOptions { Limit = 20 });
 // Directory listing
 var dir = await bucket.Files.ListDirectoryAsync("docs/");
 
+// Tree listing (S3-style delimiter mode)
+var tree = await bucket.Files.ListTreeAsync(delimiter: "/", prefix: "docs/");
+foreach (var d in tree.Directories)
+    Console.WriteLine($"  {d.Path} ({d.FileCount} files, {d.TotalSize} bytes)");
+
+// Verify file integrity (CAS files)
+var verify = await bucket.Files["readme.md"].VerifyAsync();
+Console.WriteLine($"Valid: {verify.Valid}");
+
 // Download
 var stream = await bucket.Files["readme.md"].DownloadAsync();
 
@@ -260,11 +269,13 @@ catch (CarbonFilesException ex)
 | Method | Description |
 |--------|-------------|
 | `.ListAsync(pagination?)` | List files |
+| `.ListTreeAsync(delimiter?, prefix?, limit?, cursor?)` | Tree listing (S3-style) |
 | `.ListDirectoryAsync(path?, pagination?)` | Directory listing |
 | `.UploadAsync(stream, filename, progress?, uploadToken?)` | Upload from any stream |
 | `.UploadAsync(bytes, filename, progress?, uploadToken?)` | Upload from byte array |
 | `.UploadFileAsync(filePath, filename?, progress?, uploadToken?)` | Upload from file path |
 | `["path"].GetMetadataAsync()` | File metadata |
+| `["path"].VerifyAsync()` | Verify file integrity |
 | `["path"].DownloadAsync()` | Download file |
 | `["path"].DeleteAsync()` | Delete file |
 | `["path"].PatchAsync(stream, start, end, total)` | Byte-range patch |
