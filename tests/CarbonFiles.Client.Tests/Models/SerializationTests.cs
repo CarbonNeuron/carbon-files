@@ -186,6 +186,106 @@ public class SerializationTests
     }
 
     [Fact]
+    public void BucketFile_WithSha256_Deserializes()
+    {
+        var json = """{"path":"file.txt","name":"file.txt","size":100,"mime_type":"text/plain","sha256":"abcdef1234567890","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}""";
+        var file = JsonSerializer.Deserialize<BucketFile>(json, Options)!;
+        file.Sha256.Should().Be("abcdef1234567890");
+    }
+
+    [Fact]
+    public void BucketFile_WithoutSha256_DeserializesAsNull()
+    {
+        var json = """{"path":"file.txt","name":"file.txt","size":100,"mime_type":"text/plain","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}""";
+        var file = JsonSerializer.Deserialize<BucketFile>(json, Options)!;
+        file.Sha256.Should().BeNull();
+    }
+
+    [Fact]
+    public void UploadedFile_Deserializes_WithDedupFields()
+    {
+        var json = """{"path":"file.txt","name":"file.txt","size":100,"mime_type":"text/plain","sha256":"abc123","deduplicated":true,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}""";
+        var file = JsonSerializer.Deserialize<UploadedFile>(json, Options)!;
+        file.Path.Should().Be("file.txt");
+        file.Sha256.Should().Be("abc123");
+        file.Deduplicated.Should().BeTrue();
+    }
+
+    [Fact]
+    public void UploadedFile_NotDeduplicated_Deserializes()
+    {
+        var json = """{"path":"file.txt","name":"file.txt","size":100,"mime_type":"text/plain","sha256":"abc123","deduplicated":false,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}""";
+        var file = JsonSerializer.Deserialize<UploadedFile>(json, Options)!;
+        file.Deduplicated.Should().BeFalse();
+    }
+
+    [Fact]
+    public void UploadResponse_Deserializes_UploadedFiles()
+    {
+        var json = """{"uploaded":[{"path":"file.txt","name":"file.txt","size":100,"mime_type":"text/plain","sha256":"abc123","deduplicated":true,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}]}""";
+        var resp = JsonSerializer.Deserialize<UploadResponse>(json, Options)!;
+        resp.Uploaded.Should().HaveCount(1);
+        resp.Uploaded[0].Sha256.Should().Be("abc123");
+        resp.Uploaded[0].Deduplicated.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BucketDetailResponse_WithDedupStats_Deserializes()
+    {
+        var json = """{"id":"abc","name":"b","owner":"o","created_at":"2026-01-01T00:00:00Z","file_count":10,"total_size":5000,"unique_content_count":7,"unique_content_size":3500,"files":[],"has_more_files":false}""";
+        var detail = JsonSerializer.Deserialize<BucketDetailResponse>(json, Options)!;
+        detail.UniqueContentCount.Should().Be(7);
+        detail.UniqueContentSize.Should().Be(3500);
+    }
+
+    [Fact]
+    public void FileTreeResponse_Deserializes()
+    {
+        var json = """{"prefix":"docs/","delimiter":"/","directories":[{"path":"docs/sub/","file_count":3,"total_size":1024}],"files":[{"path":"docs/readme.md","name":"readme.md","size":256,"mime_type":"text/markdown","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],"total_files":1,"total_directories":1,"cursor":"next_page_token"}""";
+        var tree = JsonSerializer.Deserialize<FileTreeResponse>(json, Options)!;
+        tree.Prefix.Should().Be("docs/");
+        tree.Delimiter.Should().Be("/");
+        tree.Directories.Should().HaveCount(1);
+        tree.Directories[0].Path.Should().Be("docs/sub/");
+        tree.Directories[0].FileCount.Should().Be(3);
+        tree.Directories[0].TotalSize.Should().Be(1024);
+        tree.Files.Should().HaveCount(1);
+        tree.TotalFiles.Should().Be(1);
+        tree.TotalDirectories.Should().Be(1);
+        tree.Cursor.Should().Be("next_page_token");
+    }
+
+    [Fact]
+    public void FileTreeResponse_NullCursor_Deserializes()
+    {
+        var json = """{"delimiter":"/","directories":[],"files":[],"total_files":0,"total_directories":0}""";
+        var tree = JsonSerializer.Deserialize<FileTreeResponse>(json, Options)!;
+        tree.Prefix.Should().BeNull();
+        tree.Cursor.Should().BeNull();
+        tree.Directories.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void VerifyResponse_Deserializes()
+    {
+        var json = """{"path":"file.txt","stored_hash":"abc123","computed_hash":"abc123","valid":true}""";
+        var verify = JsonSerializer.Deserialize<VerifyResponse>(json, Options)!;
+        verify.Path.Should().Be("file.txt");
+        verify.StoredHash.Should().Be("abc123");
+        verify.ComputedHash.Should().Be("abc123");
+        verify.Valid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void VerifyResponse_Invalid_Deserializes()
+    {
+        var json = """{"path":"file.txt","stored_hash":"abc123","computed_hash":"xyz789","valid":false}""";
+        var verify = JsonSerializer.Deserialize<VerifyResponse>(json, Options)!;
+        verify.Valid.Should().BeFalse();
+        verify.StoredHash.Should().NotBe(verify.ComputedHash);
+    }
+
+    [Fact]
     public void ApiKeyResponse_Deserializes()
     {
         var json = """{"key":"cf4_abc_secret","prefix":"cf4_abc","name":"test","created_at":"2026-01-01T00:00:00Z"}""";

@@ -275,6 +275,110 @@ public class FileOperationsTests
     }
 
     [Fact]
+    public async Task ListTreeAsync_GetsTreeResponse_WithDelimiter()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"prefix":"docs/","delimiter":"/","directories":[{"path":"docs/sub/","file_count":3,"total_size":1024}],"files":[{"path":"docs/readme.md","name":"readme.md","size":256,"mime_type":"text/markdown","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],"total_files":1,"total_directories":1,"cursor":"next"}""");
+
+        var result = await client.Buckets["b1"].Files.ListTreeAsync(
+            delimiter: "/",
+            prefix: "docs/",
+            limit: 50,
+            ct: TestContext.Current.CancellationToken);
+
+        result.Delimiter.Should().Be("/");
+        result.Prefix.Should().Be("docs/");
+        result.Directories.Should().HaveCount(1);
+        result.Directories[0].Path.Should().Be("docs/sub/");
+        result.Directories[0].FileCount.Should().Be(3);
+        result.Files.Should().HaveCount(1);
+        result.Cursor.Should().Be("next");
+        var req = handler.Requests[0];
+        req.Method.Should().Be(HttpMethod.Get);
+        req.RequestUri!.AbsolutePath.Should().Be("/api/buckets/b1/files");
+        var query = req.RequestUri!.Query;
+        query.Should().Contain("delimiter=%2F");
+        query.Should().Contain("prefix=docs%2F");
+        query.Should().Contain("limit=50");
+    }
+
+    [Fact]
+    public async Task ListTreeAsync_WithCursor_PassesCursorInQuery()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"delimiter":"/","directories":[],"files":[],"total_files":0,"total_directories":0}""");
+
+        await client.Buckets["b1"].Files.ListTreeAsync(
+            cursor: "page2",
+            ct: TestContext.Current.CancellationToken);
+
+        var query = handler.Requests[0].RequestUri!.Query;
+        query.Should().Contain("cursor=page2");
+    }
+
+    [Fact]
+    public async Task VerifyAsync_ReturnsVerifyResponse()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"path":"file.txt","stored_hash":"abc123","computed_hash":"abc123","valid":true}""");
+
+        var result = await client.Buckets["b1"].Files["file.txt"]
+            .VerifyAsync(TestContext.Current.CancellationToken);
+
+        result.Path.Should().Be("file.txt");
+        result.StoredHash.Should().Be("abc123");
+        result.ComputedHash.Should().Be("abc123");
+        result.Valid.Should().BeTrue();
+        var req = handler.Requests[0];
+        req.Method.Should().Be(HttpMethod.Get);
+        req.RequestUri!.AbsolutePath.Should().Be("/api/buckets/b1/files/file.txt/verify");
+    }
+
+    [Fact]
+    public async Task VerifyAsync_ThrowsOnNotFound()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.NotFound, """{"error":"File not found"}""");
+
+        var act = () => client.Buckets["b1"].Files["missing.txt"]
+            .VerifyAsync(TestContext.Current.CancellationToken);
+
+        var ex = await act.Should().ThrowAsync<CarbonFilesException>();
+        ex.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UploadAsync_DeserializesUploadedFileWithDedupFields()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"uploaded":[{"path":"hello.txt","name":"hello.txt","size":13,"mime_type":"text/plain","sha256":"e3b0c44298fc","deduplicated":true,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}]}""");
+
+        using var stream = new MemoryStream("Hello, World!"u8.ToArray());
+        var result = await client.Buckets["b1"].Files.UploadAsync(
+            stream, "hello.txt", ct: TestContext.Current.CancellationToken);
+
+        result.Uploaded[0].Sha256.Should().Be("e3b0c44298fc");
+        result.Uploaded[0].Deduplicated.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetMetadataAsync_DeserializesSha256()
+    {
+        var (client, handler) = CreateClient();
+        handler.Enqueue(HttpStatusCode.OK,
+            """{"path":"file.txt","name":"file.txt","size":100,"mime_type":"text/plain","sha256":"abc123def456","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}""");
+
+        var file = await client.Buckets["b1"].Files["file.txt"]
+            .GetMetadataAsync(TestContext.Current.CancellationToken);
+
+        file.Sha256.Should().Be("abc123def456");
+    }
+
+    [Fact]
     public async Task PatchAsync_ThrowsCarbonFilesException_OnError()
     {
         var (client, handler) = CreateClient();
