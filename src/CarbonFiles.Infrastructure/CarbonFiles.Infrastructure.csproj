@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Dapper.AOT</InterceptorsNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,11 +12,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.*" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="Dapper" Version="2.*" />
+    <PackageReference Include="Dapper.AOT" Version="1.*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.*" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.*" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.*" />

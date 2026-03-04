@@ -69,14 +69,9 @@ public sealed class CleanupService : BackgroundService
             cache.InvalidateShortUrlsForBucket(bucket.Id);
             cache.InvalidateUploadTokensForBucket(bucket.Id);
 
-            // Delete associated DB records
-            await repo.DeleteFilesForBucketAsync(bucket.Id, ct);
-            await repo.DeleteShortUrlsForBucketAsync(bucket.Id, ct);
-            await repo.DeleteUploadTokensForBucketAsync(bucket.Id, ct);
-            repo.RemoveBucket(bucket);
+            // Delete bucket and all associated DB records in a single transaction
+            await repo.DeleteBucketAndRelatedAsync(bucket.Id, ct);
         }
-
-        await repo.SaveChangesAsync(ct);
         cache.InvalidateStats();
         _logger.LogInformation("Cleaned up {Count} expired buckets", expired.Count);
     }

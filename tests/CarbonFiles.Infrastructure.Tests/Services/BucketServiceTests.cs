@@ -6,8 +6,9 @@ using CarbonFiles.Core.Models.Responses;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
 using CarbonFiles.Infrastructure.Services;
+using Dapper;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -48,19 +49,15 @@ internal sealed class NullCacheService : ICacheService
 
 public class BucketServiceTests : IDisposable
 {
-    private readonly CarbonFilesDbContext _db;
+    private readonly SqliteConnection _db;
     private readonly BucketService _sut;
     private readonly string _tempDir;
 
     public BucketServiceTests()
     {
-        var dbOptions = new DbContextOptionsBuilder<CarbonFilesDbContext>()
-            .UseSqlite("Data Source=:memory:")
-            .Options;
-
-        _db = new CarbonFilesDbContext(dbOptions);
-        _db.Database.OpenConnection();
-        _db.Database.EnsureCreated();
+        _db = new SqliteConnection("Data Source=:memory:");
+        _db.Open();
+        _db.Execute(DatabaseInitializer.Schema);
 
         _tempDir = Path.Combine(Path.GetTempPath(), $"cf_test_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_tempDir);
@@ -71,7 +68,7 @@ public class BucketServiceTests : IDisposable
 
     public void Dispose()
     {
-        _db.Database.CloseConnection();
+        _db.Close();
         _db.Dispose();
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, true);
@@ -166,7 +163,8 @@ public class BucketServiceTests : IDisposable
 
         var result = await _sut.CreateAsync(request, auth);
 
-        var entity = await _db.Buckets.FindAsync(new object[] { result.Id }, TestContext.Current.CancellationToken);
+        var entity = await _db.QueryFirstOrDefaultAsync<BucketEntity>(
+            "SELECT * FROM Buckets WHERE Id = @Id", new { result.Id });
         entity.Should().NotBeNull();
         entity!.Name.Should().Be("stored");
         entity.Description.Should().Be("desc");
@@ -181,7 +179,8 @@ public class BucketServiceTests : IDisposable
 
         var result = await _sut.CreateAsync(request, auth);
 
-        var entity = await _db.Buckets.FindAsync(new object[] { result.Id }, TestContext.Current.CancellationToken);
+        var entity = await _db.QueryFirstOrDefaultAsync<BucketEntity>(
+            "SELECT * FROM Buckets WHERE Id = @Id", new { result.Id });
         entity!.OwnerKeyPrefix.Should().Be("cf4_aabbccdd");
     }
 
@@ -214,23 +213,12 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task ListAsync_ExcludesExpiredByDefault()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "expired001",
-            Name = "expired",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow.AddDays(-10),
-            ExpiresAt = DateTime.UtcNow.AddDays(-1) // expired yesterday
-        });
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "valid00001",
-            Name = "valid",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddDays(7)
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, ExpiresAt) VALUES (@Id, @Name, @Owner, @CreatedAt, @ExpiresAt)",
+            new { Id = "expired001", Name = "expired", Owner = "admin", CreatedAt = DateTime.UtcNow.AddDays(-10), ExpiresAt = DateTime.UtcNow.AddDays(-1) });
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, ExpiresAt) VALUES (@Id, @Name, @Owner, @CreatedAt, @ExpiresAt)",
+            new { Id = "valid00001", Name = "valid", Owner = "admin", CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(7) });
 
         var auth = AuthContext.Admin();
         var result = await _sut.ListAsync(new PaginationParams(), auth, includeExpired: false);
@@ -242,23 +230,12 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task ListAsync_IncludeExpiredShowsAll()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "expired002",
-            Name = "expired-inc",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow.AddDays(-10),
-            ExpiresAt = DateTime.UtcNow.AddDays(-1)
-        });
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "valid00002",
-            Name = "valid-inc",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddDays(7)
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, ExpiresAt) VALUES (@Id, @Name, @Owner, @CreatedAt, @ExpiresAt)",
+            new { Id = "expired002", Name = "expired-inc", Owner = "admin", CreatedAt = DateTime.UtcNow.AddDays(-10), ExpiresAt = DateTime.UtcNow.AddDays(-1) });
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, ExpiresAt) VALUES (@Id, @Name, @Owner, @CreatedAt, @ExpiresAt)",
+            new { Id = "valid00002", Name = "valid-inc", Owner = "admin", CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(7) });
 
         var auth = AuthContext.Admin();
         var result = await _sut.ListAsync(new PaginationParams(), auth, includeExpired: true);
@@ -299,10 +276,12 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task ListAsync_SortByTotalSize()
     {
-        _db.Buckets.Add(new BucketEntity { Id = "size00001", Name = "small", Owner = "admin", CreatedAt = DateTime.UtcNow, TotalSize = 100 });
-        _db.Buckets.Add(new BucketEntity { Id = "size00002", Name = "big", Owner = "admin", CreatedAt = DateTime.UtcNow, TotalSize = 10000 });
-        _db.Buckets.Add(new BucketEntity { Id = "size00003", Name = "medium", Owner = "admin", CreatedAt = DateTime.UtcNow, TotalSize = 1000 });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync("INSERT INTO Buckets (Id, Name, Owner, CreatedAt, TotalSize) VALUES (@Id, @Name, @Owner, @CreatedAt, @TotalSize)",
+            new { Id = "size00001", Name = "small", Owner = "admin", CreatedAt = DateTime.UtcNow, TotalSize = 100L });
+        await _db.ExecuteAsync("INSERT INTO Buckets (Id, Name, Owner, CreatedAt, TotalSize) VALUES (@Id, @Name, @Owner, @CreatedAt, @TotalSize)",
+            new { Id = "size00002", Name = "big", Owner = "admin", CreatedAt = DateTime.UtcNow, TotalSize = 10000L });
+        await _db.ExecuteAsync("INSERT INTO Buckets (Id, Name, Owner, CreatedAt, TotalSize) VALUES (@Id, @Name, @Owner, @CreatedAt, @TotalSize)",
+            new { Id = "size00003", Name = "medium", Owner = "admin", CreatedAt = DateTime.UtcNow, TotalSize = 1000L });
 
         var auth = AuthContext.Admin();
         var result = await _sut.ListAsync(
@@ -319,26 +298,12 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task GetByIdAsync_ExistingBucket_ReturnsBucketWithFiles()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "get0000001",
-            Name = "get-test",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow,
-            FileCount = 1,
-            TotalSize = 512
-        });
-        _db.Files.Add(new FileEntity
-        {
-            BucketId = "get0000001",
-            Path = "hello.txt",
-            Name = "hello.txt",
-            Size = 512,
-            MimeType = "text/plain",
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, FileCount, TotalSize) VALUES (@Id, @Name, @Owner, @CreatedAt, @FileCount, @TotalSize)",
+            new { Id = "get0000001", Name = "get-test", Owner = "admin", CreatedAt = DateTime.UtcNow, FileCount = 1, TotalSize = 512L });
+        await _db.ExecuteAsync(
+            "INSERT INTO Files (BucketId, Path, Name, Size, MimeType, CreatedAt, UpdatedAt) VALUES (@BucketId, @Path, @Name, @Size, @MimeType, @CreatedAt, @UpdatedAt)",
+            new { BucketId = "get0000001", Path = "hello.txt", Name = "hello.txt", Size = 512L, MimeType = "text/plain", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
 
         var result = await _sut.GetByIdAsync("get0000001");
 
@@ -360,15 +325,9 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task GetByIdAsync_ExpiredBucket_ReturnsNull()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "expired010",
-            Name = "expired-get",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow.AddDays(-10),
-            ExpiresAt = DateTime.UtcNow.AddDays(-1)
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, ExpiresAt) VALUES (@Id, @Name, @Owner, @CreatedAt, @ExpiresAt)",
+            new { Id = "expired010", Name = "expired-get", Owner = "admin", CreatedAt = DateTime.UtcNow.AddDays(-10), ExpiresAt = DateTime.UtcNow.AddDays(-1) });
 
         var result = await _sut.GetByIdAsync("expired010");
         result.Should().BeNull();
@@ -377,28 +336,15 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task GetByIdAsync_LimitsTo100Files()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "many000001",
-            Name = "many-files",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow,
-            FileCount = 105
-        });
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, FileCount) VALUES (@Id, @Name, @Owner, @CreatedAt, @FileCount)",
+            new { Id = "many000001", Name = "many-files", Owner = "admin", CreatedAt = DateTime.UtcNow, FileCount = 105 });
         for (int i = 0; i < 105; i++)
         {
-            _db.Files.Add(new FileEntity
-            {
-                BucketId = "many000001",
-                Path = $"file{i:D4}.txt",
-                Name = $"file{i:D4}.txt",
-                Size = 100,
-                MimeType = "text/plain",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            });
+            await _db.ExecuteAsync(
+                "INSERT INTO Files (BucketId, Path, Name, Size, MimeType, CreatedAt, UpdatedAt) VALUES (@BucketId, @Path, @Name, @Size, @MimeType, @CreatedAt, @UpdatedAt)",
+                new { BucketId = "many000001", Path = $"file{i:D4}.txt", Name = $"file{i:D4}.txt", Size = 100L, MimeType = "text/plain", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         }
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await _sut.GetByIdAsync("many000001");
 
@@ -412,14 +358,9 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task UpdateAsync_UpdatesName()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "upd0000001",
-            Name = "original",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt) VALUES (@Id, @Name, @Owner, @CreatedAt)",
+            new { Id = "upd0000001", Name = "original", Owner = "admin", CreatedAt = DateTime.UtcNow });
 
         var auth = AuthContext.Admin();
         var result = await _sut.UpdateAsync("upd0000001",
@@ -432,14 +373,9 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task UpdateAsync_UpdatesDescription()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "upd0000002",
-            Name = "desc-test",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt) VALUES (@Id, @Name, @Owner, @CreatedAt)",
+            new { Id = "upd0000002", Name = "desc-test", Owner = "admin", CreatedAt = DateTime.UtcNow });
 
         var auth = AuthContext.Admin();
         var result = await _sut.UpdateAsync("upd0000002",
@@ -452,15 +388,9 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task UpdateAsync_UpdatesExpiry()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "upd0000003",
-            Name = "exp-test",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddDays(1)
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, ExpiresAt) VALUES (@Id, @Name, @Owner, @CreatedAt, @ExpiresAt)",
+            new { Id = "upd0000003", Name = "exp-test", Owner = "admin", CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(1) });
 
         var auth = AuthContext.Admin();
         var result = await _sut.UpdateAsync("upd0000003",
@@ -483,14 +413,9 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task UpdateAsync_NonOwner_ReturnsNull()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "upd0000004",
-            Name = "not-yours",
-            Owner = "alice",
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt) VALUES (@Id, @Name, @Owner, @CreatedAt)",
+            new { Id = "upd0000004", Name = "not-yours", Owner = "alice", CreatedAt = DateTime.UtcNow });
 
         var auth = AuthContext.Owner("bob", "cf4_bob12345");
         var result = await _sut.UpdateAsync("upd0000004",
@@ -502,14 +427,9 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task UpdateAsync_OwnerCanUpdate()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "upd0000005",
-            Name = "mine",
-            Owner = "alice",
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt) VALUES (@Id, @Name, @Owner, @CreatedAt)",
+            new { Id = "upd0000005", Name = "mine", Owner = "alice", CreatedAt = DateTime.UtcNow });
 
         var auth = AuthContext.Owner("alice", "cf4_alice123");
         var result = await _sut.UpdateAsync("upd0000005",
@@ -524,38 +444,18 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task DeleteAsync_ExistingBucket_DeletesAllRelated()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "del0000001",
-            Name = "to-delete",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow
-        });
-        _db.Files.Add(new FileEntity
-        {
-            BucketId = "del0000001",
-            Path = "file.txt",
-            Name = "file.txt",
-            Size = 100,
-            MimeType = "text/plain",
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        });
-        _db.ShortUrls.Add(new ShortUrlEntity
-        {
-            Code = "abc123",
-            BucketId = "del0000001",
-            FilePath = "file.txt",
-            CreatedAt = DateTime.UtcNow
-        });
-        _db.UploadTokens.Add(new UploadTokenEntity
-        {
-            Token = "cfu_testtoken1234567890123456789012345678901234",
-            BucketId = "del0000001",
-            ExpiresAt = DateTime.UtcNow.AddDays(1),
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt) VALUES (@Id, @Name, @Owner, @CreatedAt)",
+            new { Id = "del0000001", Name = "to-delete", Owner = "admin", CreatedAt = DateTime.UtcNow });
+        await _db.ExecuteAsync(
+            "INSERT INTO Files (BucketId, Path, Name, Size, MimeType, CreatedAt, UpdatedAt) VALUES (@BucketId, @Path, @Name, @Size, @MimeType, @CreatedAt, @UpdatedAt)",
+            new { BucketId = "del0000001", Path = "file.txt", Name = "file.txt", Size = 100L, MimeType = "text/plain", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        await _db.ExecuteAsync(
+            "INSERT INTO ShortUrls (Code, BucketId, FilePath, CreatedAt) VALUES (@Code, @BucketId, @FilePath, @CreatedAt)",
+            new { Code = "abc123", BucketId = "del0000001", FilePath = "file.txt", CreatedAt = DateTime.UtcNow });
+        await _db.ExecuteAsync(
+            "INSERT INTO UploadTokens (Token, BucketId, ExpiresAt, CreatedAt) VALUES (@Token, @BucketId, @ExpiresAt, @CreatedAt)",
+            new { Token = "cfu_testtoken1234567890123456789012345678901234", BucketId = "del0000001", ExpiresAt = DateTime.UtcNow.AddDays(1), CreatedAt = DateTime.UtcNow });
 
         // Create the bucket directory
         Directory.CreateDirectory(Path.Combine(_tempDir, "del0000001"));
@@ -565,10 +465,10 @@ public class BucketServiceTests : IDisposable
 
         result.Should().BeTrue();
 
-        (await _db.Buckets.FindAsync(new object[] { "del0000001" }, TestContext.Current.CancellationToken)).Should().BeNull();
-        (await _db.Files.AnyAsync(f => f.BucketId == "del0000001", TestContext.Current.CancellationToken)).Should().BeFalse();
-        (await _db.ShortUrls.AnyAsync(s => s.BucketId == "del0000001", TestContext.Current.CancellationToken)).Should().BeFalse();
-        (await _db.UploadTokens.AnyAsync(t => t.BucketId == "del0000001", TestContext.Current.CancellationToken)).Should().BeFalse();
+        (await _db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Buckets WHERE Id = 'del0000001'")).Should().Be(0);
+        (await _db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Files WHERE BucketId = 'del0000001'")).Should().Be(0);
+        (await _db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ShortUrls WHERE BucketId = 'del0000001'")).Should().Be(0);
+        (await _db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM UploadTokens WHERE BucketId = 'del0000001'")).Should().Be(0);
         Directory.Exists(Path.Combine(_tempDir, "del0000001")).Should().BeFalse();
     }
 
@@ -584,40 +484,30 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task DeleteAsync_NonOwner_ReturnsFalse()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "del0000002",
-            Name = "not-yours",
-            Owner = "alice",
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt) VALUES (@Id, @Name, @Owner, @CreatedAt)",
+            new { Id = "del0000002", Name = "not-yours", Owner = "alice", CreatedAt = DateTime.UtcNow });
 
         var auth = AuthContext.Owner("bob", "cf4_bob12345");
         var result = await _sut.DeleteAsync("del0000002", auth);
 
         result.Should().BeFalse();
         // Bucket should still exist
-        (await _db.Buckets.FindAsync(new object[] { "del0000002" }, TestContext.Current.CancellationToken)).Should().NotBeNull();
+        (await _db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Buckets WHERE Id = 'del0000002'")).Should().Be(1);
     }
 
     [Fact]
     public async Task DeleteAsync_OwnerCanDelete()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "del0000003",
-            Name = "mine-delete",
-            Owner = "alice",
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt) VALUES (@Id, @Name, @Owner, @CreatedAt)",
+            new { Id = "del0000003", Name = "mine-delete", Owner = "alice", CreatedAt = DateTime.UtcNow });
 
         var auth = AuthContext.Owner("alice", "cf4_alice123");
         var result = await _sut.DeleteAsync("del0000003", auth);
 
         result.Should().BeTrue();
-        (await _db.Buckets.FindAsync(new object[] { "del0000003" }, TestContext.Current.CancellationToken)).Should().BeNull();
+        (await _db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Buckets WHERE Id = 'del0000003'")).Should().Be(0);
     }
 
     // ── GetSummaryAsync ─────────────────────────────────────────────────
@@ -625,37 +515,15 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task GetSummaryAsync_ReturnsSummaryText()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "sum0000001",
-            Name = "summary-test",
-            Owner = "admin",
-            CreatedAt = new DateTime(2025, 1, 15, 0, 0, 0, DateTimeKind.Utc),
-            ExpiresAt = DateTime.UtcNow.AddDays(30),
-            FileCount = 2,
-            TotalSize = 1536
-        });
-        _db.Files.Add(new FileEntity
-        {
-            BucketId = "sum0000001",
-            Path = "doc.pdf",
-            Name = "doc.pdf",
-            Size = 1024,
-            MimeType = "application/pdf",
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        });
-        _db.Files.Add(new FileEntity
-        {
-            BucketId = "sum0000001",
-            Path = "img.png",
-            Name = "img.png",
-            Size = 512,
-            MimeType = "image/png",
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, ExpiresAt, FileCount, TotalSize) VALUES (@Id, @Name, @Owner, @CreatedAt, @ExpiresAt, @FileCount, @TotalSize)",
+            new { Id = "sum0000001", Name = "summary-test", Owner = "admin", CreatedAt = new DateTime(2025, 1, 15, 0, 0, 0, DateTimeKind.Utc), ExpiresAt = DateTime.UtcNow.AddDays(30), FileCount = 2, TotalSize = 1536L });
+        await _db.ExecuteAsync(
+            "INSERT INTO Files (BucketId, Path, Name, Size, MimeType, CreatedAt, UpdatedAt) VALUES (@BucketId, @Path, @Name, @Size, @MimeType, @CreatedAt, @UpdatedAt)",
+            new { BucketId = "sum0000001", Path = "doc.pdf", Name = "doc.pdf", Size = 1024L, MimeType = "application/pdf", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        await _db.ExecuteAsync(
+            "INSERT INTO Files (BucketId, Path, Name, Size, MimeType, CreatedAt, UpdatedAt) VALUES (@BucketId, @Path, @Name, @Size, @MimeType, @CreatedAt, @UpdatedAt)",
+            new { BucketId = "sum0000001", Path = "img.png", Name = "img.png", Size = 512L, MimeType = "image/png", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
 
         var result = await _sut.GetSummaryAsync("sum0000001");
 
@@ -672,17 +540,9 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task GetSummaryAsync_NeverExpiry_ShowsNever()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "sum0000002",
-            Name = "no-expire-summary",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = null,
-            FileCount = 0,
-            TotalSize = 0
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, FileCount, TotalSize) VALUES (@Id, @Name, @Owner, @CreatedAt, @FileCount, @TotalSize)",
+            new { Id = "sum0000002", Name = "no-expire-summary", Owner = "admin", CreatedAt = DateTime.UtcNow, FileCount = 0, TotalSize = 0L });
 
         var result = await _sut.GetSummaryAsync("sum0000002");
 
@@ -699,15 +559,9 @@ public class BucketServiceTests : IDisposable
     [Fact]
     public async Task GetSummaryAsync_ExpiredBucket_ReturnsNull()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "sum0000003",
-            Name = "expired-summary",
-            Owner = "admin",
-            CreatedAt = DateTime.UtcNow.AddDays(-10),
-            ExpiresAt = DateTime.UtcNow.AddDays(-1)
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, ExpiresAt) VALUES (@Id, @Name, @Owner, @CreatedAt, @ExpiresAt)",
+            new { Id = "sum0000003", Name = "expired-summary", Owner = "admin", CreatedAt = DateTime.UtcNow.AddDays(-10), ExpiresAt = DateTime.UtcNow.AddDays(-1) });
 
         var result = await _sut.GetSummaryAsync("sum0000003");
         result.Should().BeNull();
@@ -717,36 +571,14 @@ public class BucketServiceTests : IDisposable
 
     private async Task SeedBucketsAsync()
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "seed000001",
-            Name = "alpha",
-            Owner = "alice",
-            OwnerKeyPrefix = "cf4_alice123",
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
-            TotalSize = 100
-        });
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "seed000002",
-            Name = "bravo",
-            Owner = "alice",
-            OwnerKeyPrefix = "cf4_alice123",
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
-            TotalSize = 200
-        });
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = "seed000003",
-            Name = "charlie",
-            Owner = "bob",
-            OwnerKeyPrefix = "cf4_bob12345",
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
-            TotalSize = 300
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, OwnerKeyPrefix, CreatedAt, ExpiresAt, TotalSize) VALUES (@Id, @Name, @Owner, @OwnerKeyPrefix, @CreatedAt, @ExpiresAt, @TotalSize)",
+            new { Id = "seed000001", Name = "alpha", Owner = "alice", OwnerKeyPrefix = "cf4_alice123", CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(7), TotalSize = 100L });
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, OwnerKeyPrefix, CreatedAt, ExpiresAt, TotalSize) VALUES (@Id, @Name, @Owner, @OwnerKeyPrefix, @CreatedAt, @ExpiresAt, @TotalSize)",
+            new { Id = "seed000002", Name = "bravo", Owner = "alice", OwnerKeyPrefix = "cf4_alice123", CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(7), TotalSize = 200L });
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, OwnerKeyPrefix, CreatedAt, ExpiresAt, TotalSize) VALUES (@Id, @Name, @Owner, @OwnerKeyPrefix, @CreatedAt, @ExpiresAt, @TotalSize)",
+            new { Id = "seed000003", Name = "charlie", Owner = "bob", OwnerKeyPrefix = "cf4_bob12345", CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(7), TotalSize = 300L });
     }
 }

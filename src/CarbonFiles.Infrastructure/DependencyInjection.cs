@@ -1,10 +1,9 @@
+using System.Data;
 using CarbonFiles.Core.Configuration;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Infrastructure.Auth;
-using CarbonFiles.Infrastructure.Data;
-using CarbonFiles.Infrastructure.Data.CompiledModels;
 using CarbonFiles.Infrastructure.Services;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -36,10 +35,14 @@ public static class DependencyInjection
             DbPath = section[nameof(CarbonFilesOptions.DbPath)] ?? "./data/carbonfiles.db",
         };
 
-        // EF Core + SQLite
-        services.AddDbContext<CarbonFilesDbContext>(opts =>
-            opts.UseSqlite($"Data Source={options.DbPath}")
-                .UseModel(CarbonFilesDbContextModel.Instance));
+        // Dapper + SQLite
+        var connectionString = $"Data Source={options.DbPath}";
+        services.AddScoped<IDbConnection>(_ =>
+        {
+            var conn = new SqliteConnection(connectionString);
+            conn.Open();
+            return conn;
+        });
 
         // Auth
         services.AddMemoryCache();

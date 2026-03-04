@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CarbonFiles is a file-sharing API with bucket-based organization, API key authentication, and real-time SignalR events. Built with ASP.NET Minimal API on .NET 10, published as a Native AOT binary with compiled EF Core models (no precompiled queries — blocked by dotnet/efcore#35494).
+CarbonFiles is a file-sharing API with bucket-based organization, API key authentication, and real-time SignalR events. Built with ASP.NET Minimal API on .NET 10, published as a Native AOT binary. Uses Dapper with Dapper.AOT for source-generated, AOT-safe database access.
 
 ## Build & Development Commands
 
@@ -25,26 +25,9 @@ dotnet test tests/CarbonFiles.Api.Tests
 dotnet test --filter "FullyQualifiedName~BucketEndpointTests.CreateBucket"
 ```
 
-### EF Core Migration Workflow
+### Schema Changes
 
-After changing entity models, all three steps are required:
-
-```bash
-# 1. Create migration
-dotnet ef migrations add <Name> \
-  --project src/CarbonFiles.Infrastructure \
-  --startup-project src/CarbonFiles.Api
-
-# 2. Apply migration (dev only; production uses the Migrator project)
-dotnet ef database update \
-  --project src/CarbonFiles.Infrastructure \
-  --startup-project src/CarbonFiles.Api
-
-# 3. Regenerate compiled models (REQUIRED — AOT/trimming breaks without this)
-dotnet ef dbcontext optimize \
-  --project src/CarbonFiles.Infrastructure \
-  --startup-project src/CarbonFiles.Api
-```
+After changing entity models, update the raw DDL in `DatabaseInitializer.Schema` (`src/CarbonFiles.Infrastructure/Data/DatabaseInitializer.cs`). This const is used by the API at startup, the Migrator, and test fixtures. All tables use `CREATE TABLE IF NOT EXISTS` for idempotency.
 
 ### Docker
 
@@ -58,17 +41,17 @@ docker compose up -d          # Run on port 8080
 ```
 CarbonFiles.Api          → Endpoints, auth middleware, SignalR hub, JSON serialization
 CarbonFiles.Core         → Domain models, interfaces, configuration, utilities
-CarbonFiles.Infrastructure → Services, EF Core DbContext, auth implementation
-CarbonFiles.Migrator     → Standalone migration runner (used in Docker entrypoint)
+CarbonFiles.Infrastructure → Services, Dapper data access, auth implementation
+CarbonFiles.Migrator     → Standalone schema initializer (used in Docker entrypoint)
 ```
 
 ### Key Patterns
 
 - **Minimal API endpoints**: No controllers. Each feature has a static `Map*Endpoints()` extension method in `src/CarbonFiles.Api/Endpoints/` registered in `Program.cs`.
-- **Service layer, no repository pattern**: Services in `Infrastructure/Services/` use `CarbonFilesDbContext` directly. All registered via `DependencyInjection.AddInfrastructure()`.
+- **Service layer, no repository pattern**: Services in `Infrastructure/Services/` use `IDbConnection` (Dapper) directly. All registered via `DependencyInjection.AddInfrastructure()`.
 - **Source-generated JSON**: `CarbonFilesJsonContext` in `Api/Serialization/` uses `[JsonSerializable]` attributes for AOT-compatible serialization. New request/response types must be added to this context.
-- **Compiled EF Core models**: Located in `Infrastructure/Data/CompiledModels/`. Must be regenerated via `dotnet ef dbcontext optimize` after any entity/model changes.
-- **Database initialization**: Uses raw SQL DDL (`CREATE TABLE IF NOT EXISTS`) in `DatabaseInitializer` instead of EF migrations at runtime, because `Migrate()` and `EnsureCreated()` are trimmed away.
+- **Dapper.AOT**: Source-generated query execution via `[module: DapperAot]` in `Infrastructure/DapperConfig.cs`. Entity classes in `Data/Entities/` are plain POCOs that Dapper maps directly.
+- **Database initialization**: Uses raw SQL DDL (`CREATE TABLE IF NOT EXISTS`) in `DatabaseInitializer.Schema`. Shared by the API at startup, the Migrator, and test fixtures.
 - **Filesystem blob storage**: Files stored at `./data/{bucketId}/{url-encoded-path}`. Managed by singleton `FileStorageService`.
 
 ### Authentication

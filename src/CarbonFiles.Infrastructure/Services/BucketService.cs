@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text;
 using CarbonFiles.Core.Configuration;
 using CarbonFiles.Core.Interfaces;
@@ -7,7 +8,7 @@ using CarbonFiles.Core.Models.Responses;
 using CarbonFiles.Core.Utilities;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
-using Microsoft.EntityFrameworkCore;
+using Dapper;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -15,13 +16,13 @@ namespace CarbonFiles.Infrastructure.Services;
 
 public sealed class BucketService : IBucketService
 {
-    private readonly CarbonFilesDbContext _db;
+    private readonly IDbConnection _db;
     private readonly string _dataDir;
     private readonly INotificationService _notifications;
     private readonly ICacheService _cache;
     private readonly ILogger<BucketService> _logger;
 
-    public BucketService(CarbonFilesDbContext db, IOptions<CarbonFilesOptions> options, INotificationService notifications, ICacheService cache, ILogger<BucketService> logger)
+    public BucketService(IDbConnection db, IOptions<CarbonFilesOptions> options, INotificationService notifications, ICacheService cache, ILogger<BucketService> logger)
     {
         _db = db;
         _dataDir = options.Value.DataDir;
@@ -38,6 +39,7 @@ public sealed class BucketService : IBucketService
         var owner = auth.IsOwner ? auth.OwnerName! : "admin";
         var keyPrefix = auth.IsOwner ? auth.KeyPrefix : null;
 
+        var now = DateTime.UtcNow;
         var entity = new BucketEntity
         {
             Id = bucketId,
@@ -45,12 +47,13 @@ public sealed class BucketService : IBucketService
             Owner = owner,
             OwnerKeyPrefix = keyPrefix,
             Description = request.Description,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = now,
             ExpiresAt = expiresAt,
         };
 
-        _db.Buckets.Add(entity);
-        await _db.SaveChangesAsync();
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, OwnerKeyPrefix, Description, CreatedAt, ExpiresAt) VALUES (@Id, @Name, @Owner, @OwnerKeyPrefix, @Description, @CreatedAt, @ExpiresAt)",
+            entity);
 
         _logger.LogInformation("Created bucket {BucketId} with name {Name} for owner {Owner}, expires {ExpiresAt}",
             bucketId, request.Name, owner, expiresAt?.ToString("o") ?? "never");
@@ -70,30 +73,25 @@ public sealed class BucketService : IBucketService
         _logger.LogDebug("Listing buckets for {AuthType} (includeExpired={IncludeExpired}, limit={Limit}, offset={Offset})",
             auth.IsAdmin ? "admin" : auth.OwnerName ?? "public", includeExpired, pagination.Limit, pagination.Offset);
 
-        // Use raw SQL to avoid dynamic IQueryable chains that the EF Core precompiler rejects
         var whereClauses = new List<string>();
-        var parameters = new List<object>();
-        var paramIndex = 0;
+        var parameters = new DynamicParameters();
 
         if (auth.IsOwner)
         {
-            whereClauses.Add($"Owner = {{{paramIndex}}}");
-            parameters.Add(auth.OwnerName!);
-            paramIndex++;
+            whereClauses.Add("Owner = @Owner");
+            parameters.Add("Owner", auth.OwnerName);
         }
 
         if (!includeExpired)
         {
-            whereClauses.Add($"(ExpiresAt IS NULL OR ExpiresAt > {{{paramIndex}}})");
-            parameters.Add(DateTime.UtcNow);
-            paramIndex++;
+            whereClauses.Add("(ExpiresAt IS NULL OR ExpiresAt > @Now)");
+            parameters.Add("Now", DateTime.UtcNow);
         }
 
         var whereClause = whereClauses.Count > 0 ? "WHERE " + string.Join(" AND ", whereClauses) : "";
 
         // Count query
-        var countSql = $"SELECT COUNT(*) AS \"Value\" FROM Buckets {whereClause}";
-        var total = await _db.Database.SqlQueryRaw<int>(countSql, parameters.ToArray()).FirstAsync();
+        var total = await _db.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM Buckets {whereClause}", parameters);
 
         // Sort column mapping (whitelist to prevent SQL injection)
         var sortColumn = pagination.Sort?.ToLowerInvariant() switch
@@ -107,11 +105,11 @@ public sealed class BucketService : IBucketService
         };
         var sortDir = pagination.Order?.ToLowerInvariant() == "asc" ? "ASC" : "DESC";
 
-        var dataSql = $"SELECT * FROM Buckets {whereClause} ORDER BY {sortColumn} {sortDir} LIMIT {{{paramIndex}}} OFFSET {{{paramIndex + 1}}}";
-        parameters.Add(pagination.Limit);
-        parameters.Add(pagination.Offset);
+        parameters.Add("Limit", pagination.Limit);
+        parameters.Add("Offset", pagination.Offset);
 
-        var entities = await _db.Buckets.FromSqlRaw(dataSql, parameters.ToArray()).ToListAsync();
+        var dataSql = $"SELECT * FROM Buckets {whereClause} ORDER BY {sortColumn} {sortDir} LIMIT @Limit OFFSET @Offset";
+        var entities = (await _db.QueryAsync<BucketEntity>(dataSql, parameters)).AsList();
         var items = entities.Select(b => b.ToBucket()).ToList();
 
         return new PaginatedResponse<Bucket>
@@ -129,7 +127,8 @@ public sealed class BucketService : IBucketService
         if (cached != null)
             return cached;
 
-        var entity = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
+        var entity = await _db.QueryFirstOrDefaultAsync<BucketEntity>(
+            "SELECT * FROM Buckets WHERE Id = @id", new { id });
         if (entity == null)
         {
             _logger.LogDebug("Bucket {BucketId} not found", id);
@@ -143,11 +142,8 @@ public sealed class BucketService : IBucketService
             return null;
         }
 
-        var files = await _db.Files
-            .Where(f => f.BucketId == id)
-            .OrderBy(f => f.Path)
-            .Take(101) // Take 101 to detect has_more_files
-            .ToListAsync();
+        var files = (await _db.QueryAsync<FileEntity>(
+            "SELECT * FROM Files WHERE BucketId = @id ORDER BY Path LIMIT 101", new { id })).AsList();
 
         var hasMore = files.Count > 100;
         var fileList = files.Take(100).Select(f => f.ToBucketFile()).ToList();
@@ -172,7 +168,8 @@ public sealed class BucketService : IBucketService
 
     public async Task<Bucket?> GetBucketAsync(string id)
     {
-        var entity = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
+        var entity = await _db.QueryFirstOrDefaultAsync<BucketEntity>(
+            "SELECT * FROM Buckets WHERE Id = @id", new { id });
         if (entity == null)
             return null;
 
@@ -185,17 +182,16 @@ public sealed class BucketService : IBucketService
 
     public async Task<List<BucketFile>> GetAllFilesAsync(string id, CancellationToken ct = default)
     {
-        var files = await _db.Files
-            .Where(f => f.BucketId == id)
-            .OrderBy(f => f.Path)
-            .ToListAsync(ct);
+        var files = (await _db.QueryAsync<FileEntity>(
+            new CommandDefinition("SELECT * FROM Files WHERE BucketId = @id ORDER BY Path", new { id }, cancellationToken: ct))).AsList();
 
         return files.Select(f => f.ToBucketFile()).ToList();
     }
 
     public async Task<Bucket?> UpdateAsync(string id, UpdateBucketRequest request, AuthContext auth)
     {
-        var entity = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
+        var entity = await _db.QueryFirstOrDefaultAsync<BucketEntity>(
+            "SELECT * FROM Buckets WHERE Id = @id", new { id });
         if (entity == null)
         {
             _logger.LogDebug("Bucket {BucketId} not found for update", id);
@@ -218,7 +214,10 @@ public sealed class BucketService : IBucketService
         if (request.ExpiresIn != null)
             entity.ExpiresAt = ExpiryParser.Parse(request.ExpiresIn);
 
-        await _db.SaveChangesAsync();
+        await _db.ExecuteAsync(
+            "UPDATE Buckets SET Name = @Name, Description = @Description, ExpiresAt = @ExpiresAt WHERE Id = @Id",
+            entity);
+
         _cache.InvalidateBucket(id);
         _cache.InvalidateStats();
 
@@ -237,7 +236,8 @@ public sealed class BucketService : IBucketService
 
     public async Task<bool> DeleteAsync(string id, AuthContext auth)
     {
-        var entity = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
+        var entity = await _db.QueryFirstOrDefaultAsync<BucketEntity>(
+            "SELECT * FROM Buckets WHERE Id = @id", new { id });
         if (entity == null)
         {
             _logger.LogDebug("Bucket {BucketId} not found for delete", id);
@@ -251,18 +251,15 @@ public sealed class BucketService : IBucketService
             return false;
         }
 
-        // Delete all related entities
-        var files = await _db.Files.Where(f => f.BucketId == id).ToListAsync();
-        _db.Files.RemoveRange(files);
+        // Delete all related entities in a transaction
+        using var tx = _db.BeginTransaction();
 
-        var shortUrls = await _db.ShortUrls.Where(s => s.BucketId == id).ToListAsync();
-        _db.ShortUrls.RemoveRange(shortUrls);
+        var fileCount = await _db.ExecuteAsync("DELETE FROM Files WHERE BucketId = @id", new { id }, tx);
+        var shortUrlCount = await _db.ExecuteAsync("DELETE FROM ShortUrls WHERE BucketId = @id", new { id }, tx);
+        var tokenCount = await _db.ExecuteAsync("DELETE FROM UploadTokens WHERE BucketId = @id", new { id }, tx);
+        await _db.ExecuteAsync("DELETE FROM Buckets WHERE Id = @id", new { id }, tx);
 
-        var uploadTokens = await _db.UploadTokens.Where(t => t.BucketId == id).ToListAsync();
-        _db.UploadTokens.RemoveRange(uploadTokens);
-
-        _db.Buckets.Remove(entity);
-        await _db.SaveChangesAsync();
+        tx.Commit();
 
         // Delete the bucket directory from disk
         var bucketDir = Path.Combine(_dataDir, id);
@@ -270,7 +267,7 @@ public sealed class BucketService : IBucketService
             Directory.Delete(bucketDir, true);
 
         _logger.LogInformation("Deleted bucket {BucketId} with {FileCount} files, {ShortUrlCount} short URLs, {TokenCount} upload tokens",
-            id, files.Count, shortUrls.Count, uploadTokens.Count);
+            id, fileCount, shortUrlCount, tokenCount);
 
         await _notifications.NotifyBucketDeleted(id);
         _cache.InvalidateBucket(id);
@@ -283,7 +280,8 @@ public sealed class BucketService : IBucketService
 
     public async Task<string?> GetSummaryAsync(string id)
     {
-        var entity = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == id);
+        var entity = await _db.QueryFirstOrDefaultAsync<BucketEntity>(
+            "SELECT * FROM Buckets WHERE Id = @id", new { id });
         if (entity == null)
         {
             _logger.LogDebug("Bucket {BucketId} not found for summary", id);
@@ -297,10 +295,8 @@ public sealed class BucketService : IBucketService
             return null;
         }
 
-        var files = await _db.Files
-            .Where(f => f.BucketId == id)
-            .OrderBy(f => f.Path)
-            .ToListAsync();
+        var files = (await _db.QueryAsync<FileEntity>(
+            "SELECT * FROM Files WHERE BucketId = @id ORDER BY Path", new { id })).AsList();
 
         var sb = new StringBuilder();
         sb.AppendLine($"Bucket: {entity.Name}");

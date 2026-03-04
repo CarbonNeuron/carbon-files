@@ -1,3 +1,4 @@
+using System.Data;
 using CarbonFiles.Api.Auth;
 using CarbonFiles.Api.Endpoints;
 using CarbonFiles.Api.Hubs;
@@ -6,7 +7,6 @@ using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Infrastructure;
 using CarbonFiles.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -161,11 +161,10 @@ Directory.CreateDirectory(dataDir);
 Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 
 // Initialize database schema + WAL mode
-// Both Migrate() and EnsureCreated() fail under Native AOT (design-time operations are trimmed).
-// Use raw SQL DDL instead — idempotent via CREATE TABLE IF NOT EXISTS.
+// Use raw SQL DDL — idempotent via CREATE TABLE IF NOT EXISTS.
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<CarbonFilesDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<IDbConnection>();
     DatabaseInitializer.Initialize(db);
 }
 

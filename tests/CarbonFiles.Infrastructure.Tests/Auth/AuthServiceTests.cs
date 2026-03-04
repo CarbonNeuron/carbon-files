@@ -4,9 +4,9 @@ using CarbonFiles.Core.Configuration;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Infrastructure.Auth;
 using CarbonFiles.Infrastructure.Data;
-using CarbonFiles.Infrastructure.Data.Entities;
+using Dapper;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -19,19 +19,15 @@ public class AuthServiceTests : IDisposable
     private const string AdminKey = "test-admin-key";
     private const string JwtSecret = "test-jwt-secret";
 
-    private readonly CarbonFilesDbContext _db;
+    private readonly SqliteConnection _db;
     private readonly JwtHelper _jwt;
     private readonly AuthService _sut;
 
     public AuthServiceTests()
     {
-        var dbOptions = new DbContextOptionsBuilder<CarbonFilesDbContext>()
-            .UseSqlite("Data Source=:memory:")
-            .Options;
-
-        _db = new CarbonFilesDbContext(dbOptions);
-        _db.Database.OpenConnection();
-        _db.Database.EnsureCreated();
+        _db = new SqliteConnection("Data Source=:memory:");
+        _db.Open();
+        _db.Execute(DatabaseInitializer.Schema);
 
         var options = Options.Create(new CarbonFilesOptions
         {
@@ -47,7 +43,7 @@ public class AuthServiceTests : IDisposable
 
     public void Dispose()
     {
-        _db.Database.CloseConnection();
+        _db.Close();
         _db.Dispose();
     }
 
@@ -69,14 +65,9 @@ public class AuthServiceTests : IDisposable
         var hashedSecret = Convert.ToHexStringLower(
             SHA256.HashData(Encoding.UTF8.GetBytes(secret)));
 
-        _db.ApiKeys.Add(new ApiKeyEntity
-        {
-            Prefix = prefix,
-            HashedSecret = hashedSecret,
-            Name = "test-owner",
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO ApiKeys (Prefix, HashedSecret, Name, CreatedAt) VALUES (@Prefix, @HashedSecret, @Name, @CreatedAt)",
+            new { Prefix = prefix, HashedSecret = hashedSecret, Name = "test-owner", CreatedAt = DateTime.UtcNow });
 
         var fullKey = $"cf4_abcd1234_{secret}";
         var result = await _sut.ResolveAsync(fullKey);

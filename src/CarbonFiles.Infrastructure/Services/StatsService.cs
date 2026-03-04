@@ -1,15 +1,15 @@
+using System.Data;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models.Responses;
-using CarbonFiles.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
+using Dapper;
 
 namespace CarbonFiles.Infrastructure.Services;
 
 public sealed class StatsService : IStatsService
 {
-    private readonly CarbonFilesDbContext _db;
+    private readonly IDbConnection _db;
 
-    public StatsService(CarbonFilesDbContext db)
+    public StatsService(IDbConnection db)
     {
         _db = db;
     }
@@ -18,30 +18,31 @@ public sealed class StatsService : IStatsService
     {
         var now = DateTime.UtcNow;
 
-        var totalBuckets = await _db.Buckets
-            .Where(b => b.ExpiresAt == null || b.ExpiresAt > now)
-            .CountAsync(ct);
+        var totalBuckets = await _db.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Buckets WHERE ExpiresAt IS NULL OR ExpiresAt > @now",
+            new { now });
 
-        var totalFiles = await _db.Files.CountAsync(ct);
+        var totalFiles = await _db.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Files");
 
-        var totalSize = await _db.Files.SumAsync(f => (long?)f.Size, ct) ?? 0;
+        var totalSize = await _db.ExecuteScalarAsync<long?>(
+            "SELECT SUM(Size) FROM Files") ?? 0;
 
-        var totalKeys = await _db.ApiKeys.CountAsync(ct);
+        var totalKeys = await _db.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM ApiKeys");
 
-        var totalDownloads = await _db.Buckets
-            .Where(b => b.ExpiresAt == null || b.ExpiresAt > now)
-            .SumAsync(b => (long?)b.DownloadCount, ct) ?? 0;
+        var totalDownloads = await _db.ExecuteScalarAsync<long?>(
+            "SELECT SUM(DownloadCount) FROM Buckets WHERE ExpiresAt IS NULL OR ExpiresAt > @now",
+            new { now }) ?? 0;
 
-        var storageByOwner = await _db.Buckets
-            .Where(b => b.ExpiresAt == null || b.ExpiresAt > now)
-            .GroupBy(b => b.Owner)
-            .Select(g => new OwnerStats
-            {
-                Owner = g.Key,
-                BucketCount = g.Count(),
-                FileCount = g.Sum(b => b.FileCount),
-                TotalSize = g.Sum(b => b.TotalSize)
-            }).ToListAsync(ct);
+        var storageByOwner = (await _db.QueryAsync<OwnerStats>(
+            """
+            SELECT Owner, COUNT(*) AS BucketCount, SUM(FileCount) AS FileCount, SUM(TotalSize) AS TotalSize
+            FROM Buckets
+            WHERE ExpiresAt IS NULL OR ExpiresAt > @now
+            GROUP BY Owner
+            """,
+            new { now })).AsList();
 
         return new StatsResponse
         {

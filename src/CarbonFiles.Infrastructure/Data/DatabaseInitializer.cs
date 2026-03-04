@@ -1,4 +1,5 @@
-using Microsoft.EntityFrameworkCore;
+using System.Data;
+using Dapper;
 
 namespace CarbonFiles.Infrastructure.Data;
 
@@ -9,7 +10,7 @@ namespace CarbonFiles.Infrastructure.Data;
 /// </summary>
 public static class DatabaseInitializer
 {
-    private const string Schema = """
+    internal const string Schema = """
         CREATE TABLE IF NOT EXISTS "Buckets" (
             "Id" TEXT NOT NULL CONSTRAINT "PK_Buckets" PRIMARY KEY,
             "Name" TEXT NOT NULL,
@@ -72,9 +73,9 @@ public static class DatabaseInitializer
         CREATE INDEX IF NOT EXISTS "IX_UploadTokens_BucketId" ON "UploadTokens" ("BucketId");
         """;
 
-    public static void Initialize(CarbonFilesDbContext db)
+    public static void Initialize(IDbConnection db)
     {
-        db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
-        db.Database.ExecuteSqlRaw(Schema);
+        db.Execute("PRAGMA journal_mode=WAL;");
+        db.Execute(Schema);
     }
 }

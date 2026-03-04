@@ -4,8 +4,9 @@ using CarbonFiles.Core.Models.Requests;
 using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
 using CarbonFiles.Infrastructure.Services;
+using Dapper;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -13,25 +14,21 @@ namespace CarbonFiles.Infrastructure.Tests.Services;
 
 public class UploadTokenServiceTests : IDisposable
 {
-    private readonly CarbonFilesDbContext _db;
+    private readonly SqliteConnection _db;
     private readonly UploadTokenService _sut;
 
     public UploadTokenServiceTests()
     {
-        var dbOptions = new DbContextOptionsBuilder<CarbonFilesDbContext>()
-            .UseSqlite("Data Source=:memory:")
-            .Options;
-
-        _db = new CarbonFilesDbContext(dbOptions);
-        _db.Database.OpenConnection();
-        _db.Database.EnsureCreated();
+        _db = new SqliteConnection("Data Source=:memory:");
+        _db.Open();
+        _db.Execute(DatabaseInitializer.Schema);
 
         _sut = new UploadTokenService(_db, new NullCacheService(), NullLogger<UploadTokenService>.Instance);
     }
 
     public void Dispose()
     {
-        _db.Database.CloseConnection();
+        _db.Close();
         _db.Dispose();
     }
 
@@ -137,7 +134,8 @@ public class UploadTokenServiceTests : IDisposable
 
         var result = await _sut.CreateAsync("bucket0007", request, auth);
 
-        var entity = await _db.UploadTokens.FirstOrDefaultAsync(t => t.Token == result.Token, TestContext.Current.CancellationToken);
+        var entity = await _db.QueryFirstOrDefaultAsync<UploadTokenEntity>(
+            "SELECT * FROM UploadTokens WHERE Token = @Token", new { result.Token });
         entity.Should().NotBeNull();
         entity!.BucketId.Should().Be("bucket0007");
         entity.MaxUploads.Should().Be(10);
@@ -161,14 +159,9 @@ public class UploadTokenServiceTests : IDisposable
     public async Task ValidateAsync_ValidToken_ReturnsTrueWithBucketId()
     {
         await SeedBucketAsync("bucket0010", "admin");
-        _db.UploadTokens.Add(new UploadTokenEntity
-        {
-            Token = "cfu_validtoken00000000000000000000000000000000000000",
-            BucketId = "bucket0010",
-            ExpiresAt = DateTime.UtcNow.AddDays(1),
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO UploadTokens (Token, BucketId, ExpiresAt, CreatedAt) VALUES (@Token, @BucketId, @ExpiresAt, @CreatedAt)",
+            new { Token = "cfu_validtoken00000000000000000000000000000000000000", BucketId = "bucket0010", ExpiresAt = DateTime.UtcNow.AddDays(1), CreatedAt = DateTime.UtcNow });
 
         var (bucketId, isValid) = await _sut.ValidateAsync("cfu_validtoken00000000000000000000000000000000000000");
 
@@ -180,14 +173,9 @@ public class UploadTokenServiceTests : IDisposable
     public async Task ValidateAsync_ExpiredToken_ReturnsFalse()
     {
         await SeedBucketAsync("bucket0011", "admin");
-        _db.UploadTokens.Add(new UploadTokenEntity
-        {
-            Token = "cfu_expiredtoken000000000000000000000000000000000000",
-            BucketId = "bucket0011",
-            ExpiresAt = DateTime.UtcNow.AddDays(-1), // expired
-            CreatedAt = DateTime.UtcNow.AddDays(-2)
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO UploadTokens (Token, BucketId, ExpiresAt, CreatedAt) VALUES (@Token, @BucketId, @ExpiresAt, @CreatedAt)",
+            new { Token = "cfu_expiredtoken000000000000000000000000000000000000", BucketId = "bucket0011", ExpiresAt = DateTime.UtcNow.AddDays(-1), CreatedAt = DateTime.UtcNow.AddDays(-2) });
 
         var (bucketId, isValid) = await _sut.ValidateAsync("cfu_expiredtoken000000000000000000000000000000000000");
 
@@ -207,16 +195,9 @@ public class UploadTokenServiceTests : IDisposable
     public async Task ValidateAsync_MaxUploadsReached_ReturnsFalse()
     {
         await SeedBucketAsync("bucket0012", "admin");
-        _db.UploadTokens.Add(new UploadTokenEntity
-        {
-            Token = "cfu_maxedtoken000000000000000000000000000000000000000",
-            BucketId = "bucket0012",
-            ExpiresAt = DateTime.UtcNow.AddDays(1),
-            MaxUploads = 3,
-            UploadsUsed = 3, // reached max
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO UploadTokens (Token, BucketId, ExpiresAt, MaxUploads, UploadsUsed, CreatedAt) VALUES (@Token, @BucketId, @ExpiresAt, @MaxUploads, @UploadsUsed, @CreatedAt)",
+            new { Token = "cfu_maxedtoken000000000000000000000000000000000000000", BucketId = "bucket0012", ExpiresAt = DateTime.UtcNow.AddDays(1), MaxUploads = 3, UploadsUsed = 3, CreatedAt = DateTime.UtcNow });
 
         var (_, isValid) = await _sut.ValidateAsync("cfu_maxedtoken000000000000000000000000000000000000000");
 
@@ -227,16 +208,9 @@ public class UploadTokenServiceTests : IDisposable
     public async Task ValidateAsync_MaxUploadsNotReached_ReturnsTrue()
     {
         await SeedBucketAsync("bucket0013", "admin");
-        _db.UploadTokens.Add(new UploadTokenEntity
-        {
-            Token = "cfu_partialtoken00000000000000000000000000000000000",
-            BucketId = "bucket0013",
-            ExpiresAt = DateTime.UtcNow.AddDays(1),
-            MaxUploads = 5,
-            UploadsUsed = 2,
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO UploadTokens (Token, BucketId, ExpiresAt, MaxUploads, UploadsUsed, CreatedAt) VALUES (@Token, @BucketId, @ExpiresAt, @MaxUploads, @UploadsUsed, @CreatedAt)",
+            new { Token = "cfu_partialtoken00000000000000000000000000000000000", BucketId = "bucket0013", ExpiresAt = DateTime.UtcNow.AddDays(1), MaxUploads = 5, UploadsUsed = 2, CreatedAt = DateTime.UtcNow });
 
         var (bucketId, isValid) = await _sut.ValidateAsync("cfu_partialtoken00000000000000000000000000000000000");
 
@@ -248,16 +222,9 @@ public class UploadTokenServiceTests : IDisposable
     public async Task ValidateAsync_NoMaxUploads_ReturnsTrue()
     {
         await SeedBucketAsync("bucket0014", "admin");
-        _db.UploadTokens.Add(new UploadTokenEntity
-        {
-            Token = "cfu_nolimittoken0000000000000000000000000000000000",
-            BucketId = "bucket0014",
-            ExpiresAt = DateTime.UtcNow.AddDays(1),
-            MaxUploads = null,
-            UploadsUsed = 100, // lots of uploads, but no limit
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO UploadTokens (Token, BucketId, ExpiresAt, MaxUploads, UploadsUsed, CreatedAt) VALUES (@Token, @BucketId, @ExpiresAt, @MaxUploads, @UploadsUsed, @CreatedAt)",
+            new { Token = "cfu_nolimittoken0000000000000000000000000000000000", BucketId = "bucket0014", ExpiresAt = DateTime.UtcNow.AddDays(1), MaxUploads = (int?)null, UploadsUsed = 100, CreatedAt = DateTime.UtcNow });
 
         var (_, isValid) = await _sut.ValidateAsync("cfu_nolimittoken0000000000000000000000000000000000");
 
@@ -270,22 +237,15 @@ public class UploadTokenServiceTests : IDisposable
     public async Task IncrementUsageAsync_IncrementsUploadsUsed()
     {
         await SeedBucketAsync("bucket0020", "admin");
-        _db.UploadTokens.Add(new UploadTokenEntity
-        {
-            Token = "cfu_inctoken0000000000000000000000000000000000000000",
-            BucketId = "bucket0020",
-            ExpiresAt = DateTime.UtcNow.AddDays(1),
-            UploadsUsed = 0,
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO UploadTokens (Token, BucketId, ExpiresAt, UploadsUsed, CreatedAt) VALUES (@Token, @BucketId, @ExpiresAt, @UploadsUsed, @CreatedAt)",
+            new { Token = "cfu_inctoken0000000000000000000000000000000000000000", BucketId = "bucket0020", ExpiresAt = DateTime.UtcNow.AddDays(1), UploadsUsed = 0, CreatedAt = DateTime.UtcNow });
 
         await _sut.IncrementUsageAsync("cfu_inctoken0000000000000000000000000000000000000000", 3);
 
-        // Need to reload to see the change from ExecuteUpdate
-        var entity = await _db.UploadTokens
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Token == "cfu_inctoken0000000000000000000000000000000000000000", TestContext.Current.CancellationToken);
+        var entity = await _db.QueryFirstOrDefaultAsync<UploadTokenEntity>(
+            "SELECT * FROM UploadTokens WHERE Token = @Token",
+            new { Token = "cfu_inctoken0000000000000000000000000000000000000000" });
         entity!.UploadsUsed.Should().Be(3);
     }
 
@@ -293,21 +253,15 @@ public class UploadTokenServiceTests : IDisposable
     public async Task IncrementUsageAsync_AccumulatesCorrectly()
     {
         await SeedBucketAsync("bucket0021", "admin");
-        _db.UploadTokens.Add(new UploadTokenEntity
-        {
-            Token = "cfu_accumtoken000000000000000000000000000000000000000",
-            BucketId = "bucket0021",
-            ExpiresAt = DateTime.UtcNow.AddDays(1),
-            UploadsUsed = 5,
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO UploadTokens (Token, BucketId, ExpiresAt, UploadsUsed, CreatedAt) VALUES (@Token, @BucketId, @ExpiresAt, @UploadsUsed, @CreatedAt)",
+            new { Token = "cfu_accumtoken000000000000000000000000000000000000000", BucketId = "bucket0021", ExpiresAt = DateTime.UtcNow.AddDays(1), UploadsUsed = 5, CreatedAt = DateTime.UtcNow });
 
         await _sut.IncrementUsageAsync("cfu_accumtoken000000000000000000000000000000000000000", 2);
 
-        var entity = await _db.UploadTokens
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Token == "cfu_accumtoken000000000000000000000000000000000000000", TestContext.Current.CancellationToken);
+        var entity = await _db.QueryFirstOrDefaultAsync<UploadTokenEntity>(
+            "SELECT * FROM UploadTokens WHERE Token = @Token",
+            new { Token = "cfu_accumtoken000000000000000000000000000000000000000" });
         entity!.UploadsUsed.Should().Be(7);
     }
 
@@ -315,14 +269,8 @@ public class UploadTokenServiceTests : IDisposable
 
     private async Task SeedBucketAsync(string bucketId, string owner = "admin")
     {
-        _db.Buckets.Add(new BucketEntity
-        {
-            Id = bucketId,
-            Name = $"bucket-{bucketId}",
-            Owner = owner,
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddDays(7)
-        });
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _db.ExecuteAsync(
+            "INSERT INTO Buckets (Id, Name, Owner, CreatedAt, ExpiresAt) VALUES (@Id, @Name, @Owner, @CreatedAt, @ExpiresAt)",
+            new { Id = bucketId, Name = $"bucket-{bucketId}", Owner = owner, CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(7) });
     }
 }

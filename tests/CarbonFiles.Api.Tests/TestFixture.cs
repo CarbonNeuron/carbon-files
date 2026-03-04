@@ -1,8 +1,8 @@
+using System.Data;
 using CarbonFiles.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -12,7 +12,8 @@ namespace CarbonFiles.Api.Tests;
 public class TestFixture : IAsyncLifetime
 {
     private WebApplicationFactory<Program> _factory = null!;
-    private SqliteConnection _connection = null!;
+    private SqliteConnection _keepAlive = null!;
+    private string _connectionString = null!;
     private string _tempDir = null!;
     public HttpClient Client { get; private set; } = null!;
 
@@ -21,9 +22,15 @@ public class TestFixture : IAsyncLifetime
         _tempDir = Path.Combine(Path.GetTempPath(), $"cf_test_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_tempDir);
 
-        // Shared in-memory SQLite connection (stays open for lifetime of tests)
-        _connection = new SqliteConnection("DataSource=:memory:");
-        await _connection.OpenAsync();
+        // Shared named in-memory SQLite database. The _keepAlive connection keeps
+        // the DB alive; each DI scope gets its own SqliteConnection to the same DB.
+        var dbName = $"TestFixture_{Guid.NewGuid():N}";
+        _connectionString = $"Data Source={dbName};Mode=Memory;Cache=Shared";
+        _keepAlive = new SqliteConnection(_connectionString);
+        await _keepAlive.OpenAsync();
+
+        // Create schema on the keep-alive connection
+        DatabaseInitializer.Initialize(_keepAlive);
 
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -31,15 +38,20 @@ public class TestFixture : IAsyncLifetime
 
             builder.ConfigureServices(services =>
             {
-                // Remove existing DbContext registration
+                // Remove existing IDbConnection registration
                 var descriptor = services.SingleOrDefault(d =>
-                    d.ServiceType == typeof(DbContextOptions<CarbonFilesDbContext>));
+                    d.ServiceType == typeof(IDbConnection));
                 if (descriptor != null)
                     services.Remove(descriptor);
 
-                // Use in-memory SQLite with shared connection
-                services.AddDbContext<CarbonFilesDbContext>(options =>
-                    options.UseSqlite(_connection));
+                // Each scope gets its own connection to the shared in-memory DB
+                var connStr = _connectionString;
+                services.AddScoped<IDbConnection>(_ =>
+                {
+                    var conn = new SqliteConnection(connStr);
+                    conn.Open();
+                    return conn;
+                });
             });
 
             builder.ConfigureAppConfiguration((ctx, config) =>
@@ -54,18 +66,13 @@ public class TestFixture : IAsyncLifetime
         });
 
         Client = _factory.CreateClient();
-
-        // Ensure database schema is created
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<CarbonFilesDbContext>();
-        await db.Database.EnsureCreatedAsync();
     }
 
     public async ValueTask DisposeAsync()
     {
         Client.Dispose();
         await _factory.DisposeAsync();
-        await _connection.DisposeAsync();
+        await _keepAlive.DisposeAsync();
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, true);
     }

@@ -1,8 +1,9 @@
+using System.Data;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Configuration;
-using CarbonFiles.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
+using CarbonFiles.Infrastructure.Data.Entities;
+using Dapper;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,14 +12,14 @@ namespace CarbonFiles.Infrastructure.Auth;
 
 public sealed class AuthService : IAuthService
 {
-    private readonly CarbonFilesDbContext _db;
+    private readonly IDbConnection _db;
     private readonly CarbonFilesOptions _options;
     private readonly JwtHelper _jwt;
     private readonly IMemoryCache _cache;
     private readonly ILogger<AuthService> _logger;
     private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
 
-    public AuthService(CarbonFilesDbContext db, IOptions<CarbonFilesOptions> options, JwtHelper jwt, IMemoryCache cache, ILogger<AuthService> logger)
+    public AuthService(IDbConnection db, IOptions<CarbonFilesOptions> options, JwtHelper jwt, IMemoryCache cache, ILogger<AuthService> logger)
     {
         _db = db;
         _options = options.Value;
@@ -84,7 +85,8 @@ public sealed class AuthService : IAuthService
         var prefix = $"cf4_{parts[1]}";
         var secret = parts[2];
 
-        var entity = await _db.ApiKeys.FirstOrDefaultAsync(k => k.Prefix == prefix);
+        var entity = await _db.QueryFirstOrDefaultAsync<ApiKeyEntity>(
+            "SELECT * FROM ApiKeys WHERE Prefix = @prefix", new { prefix });
         if (entity == null) return null;
 
         var hashed = Convert.ToHexStringLower(
@@ -94,8 +96,9 @@ public sealed class AuthService : IAuthService
         if (hashed != entity.HashedSecret) return null;
 
         // Update last_used_at
-        entity.LastUsedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+        await _db.ExecuteAsync(
+            "UPDATE ApiKeys SET LastUsedAt = @now WHERE Prefix = @prefix",
+            new { now = DateTime.UtcNow, prefix });
 
         return (entity.Name, entity.Prefix);
     }

@@ -1,6 +1,7 @@
+using System.Data;
 using CarbonFiles.Api.Serialization;
 using CarbonFiles.Core.Models.Responses;
-using CarbonFiles.Infrastructure.Data;
+using Dapper;
 
 namespace CarbonFiles.Api.Endpoints;
 
@@ -10,20 +11,12 @@ public static class HealthEndpoints
 
     public static void MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/healthz", async (CarbonFilesDbContext db, ILoggerFactory loggerFactory) =>
+        app.MapGet("/healthz", async (IDbConnection db, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("CarbonFiles.Api.Endpoints.HealthEndpoints");
             try
             {
-                var canConnect = await db.Database.CanConnectAsync();
-                if (!canConnect)
-                {
-                    logger.LogWarning("Health check failed: database {Status}", "unreachable");
-                    return Results.Json(
-                        new HealthResponse { Status = "unhealthy", UptimeSeconds = 0, Db = "unreachable" },
-                        CarbonFilesJsonContext.Default.HealthResponse,
-                        statusCode: 503);
-                }
+                await db.ExecuteScalarAsync<int>("SELECT 1");
 
                 return Results.Ok(new HealthResponse
                 {

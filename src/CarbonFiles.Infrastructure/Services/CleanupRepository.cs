@@ -1,47 +1,40 @@
-using CarbonFiles.Infrastructure.Data;
+using System.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
-using Microsoft.EntityFrameworkCore;
+using Dapper;
 
 namespace CarbonFiles.Infrastructure.Services;
 
 public sealed class CleanupRepository
 {
-    private readonly CarbonFilesDbContext _db;
+    private readonly IDbConnection _db;
 
-    public CleanupRepository(CarbonFilesDbContext db)
+    public CleanupRepository(IDbConnection db)
     {
         _db = db;
     }
 
     public async Task<List<BucketEntity>> GetExpiredBucketsAsync(DateTime now, CancellationToken ct)
     {
-        return await _db.Buckets
-            .Where(b => b.ExpiresAt != null && b.ExpiresAt < now)
-            .ToListAsync(ct);
+        return (await _db.QueryAsync<BucketEntity>(
+            new CommandDefinition(
+                "SELECT * FROM Buckets WHERE ExpiresAt IS NOT NULL AND ExpiresAt < @now",
+                new { now },
+                cancellationToken: ct))).AsList();
     }
 
-    public async Task DeleteFilesForBucketAsync(string bucketId, CancellationToken ct)
+    public async Task DeleteBucketAndRelatedAsync(string bucketId, CancellationToken ct)
     {
-        await _db.Files.Where(f => f.BucketId == bucketId).ExecuteDeleteAsync(ct);
-    }
+        using var tx = _db.BeginTransaction();
 
-    public async Task DeleteShortUrlsForBucketAsync(string bucketId, CancellationToken ct)
-    {
-        await _db.ShortUrls.Where(s => s.BucketId == bucketId).ExecuteDeleteAsync(ct);
-    }
+        await _db.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM Files WHERE BucketId = @bucketId", new { bucketId }, tx, cancellationToken: ct));
+        await _db.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM ShortUrls WHERE BucketId = @bucketId", new { bucketId }, tx, cancellationToken: ct));
+        await _db.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM UploadTokens WHERE BucketId = @bucketId", new { bucketId }, tx, cancellationToken: ct));
+        await _db.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM Buckets WHERE Id = @bucketId", new { bucketId }, tx, cancellationToken: ct));
 
-    public async Task DeleteUploadTokensForBucketAsync(string bucketId, CancellationToken ct)
-    {
-        await _db.UploadTokens.Where(t => t.BucketId == bucketId).ExecuteDeleteAsync(ct);
-    }
-
-    public void RemoveBucket(BucketEntity bucket)
-    {
-        _db.Buckets.Remove(bucket);
-    }
-
-    public async Task SaveChangesAsync(CancellationToken ct)
-    {
-        await _db.SaveChangesAsync(ct);
+        tx.Commit();
     }
 }

@@ -1,5 +1,5 @@
 using CarbonFiles.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 
 var dbPath = Environment.GetEnvironmentVariable("CarbonFiles__DbPath")
     ?? args.FirstOrDefault()
@@ -8,14 +8,10 @@ var dbPath = Environment.GetEnvironmentVariable("CarbonFiles__DbPath")
 var dir = Path.GetDirectoryName(Path.GetFullPath(dbPath));
 if (dir != null) Directory.CreateDirectory(dir);
 
-Console.WriteLine($"Migrating database: {dbPath}");
+Console.WriteLine($"Initializing database: {dbPath}");
 
-var options = new DbContextOptionsBuilder<CarbonFilesDbContext>()
-    .UseSqlite($"Data Source={dbPath}")
-    .Options;
+using var conn = new SqliteConnection($"Data Source={dbPath}");
+conn.Open();
+DatabaseInitializer.Initialize(conn);
 
-using var db = new CarbonFilesDbContext(options);
-db.Database.Migrate();
-db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
-
-Console.WriteLine("Migration complete.");
+Console.WriteLine("Database initialization complete.");

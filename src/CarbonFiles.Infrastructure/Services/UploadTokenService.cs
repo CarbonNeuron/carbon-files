@@ -1,22 +1,22 @@
+using System.Data;
 using CarbonFiles.Core.Interfaces;
 using CarbonFiles.Core.Models;
 using CarbonFiles.Core.Models.Requests;
 using CarbonFiles.Core.Models.Responses;
 using CarbonFiles.Core.Utilities;
-using CarbonFiles.Infrastructure.Data;
 using CarbonFiles.Infrastructure.Data.Entities;
-using Microsoft.EntityFrameworkCore;
+using Dapper;
 using Microsoft.Extensions.Logging;
 
 namespace CarbonFiles.Infrastructure.Services;
 
 public sealed class UploadTokenService : IUploadTokenService
 {
-    private readonly CarbonFilesDbContext _db;
+    private readonly IDbConnection _db;
     private readonly ICacheService _cache;
     private readonly ILogger<UploadTokenService> _logger;
 
-    public UploadTokenService(CarbonFilesDbContext db, ICacheService cache, ILogger<UploadTokenService> logger)
+    public UploadTokenService(IDbConnection db, ICacheService cache, ILogger<UploadTokenService> logger)
     {
         _db = db;
         _cache = cache;
@@ -26,7 +26,8 @@ public sealed class UploadTokenService : IUploadTokenService
     public async Task<UploadTokenResponse> CreateAsync(string bucketId, CreateUploadTokenRequest request, AuthContext auth)
     {
         // Verify bucket exists
-        var bucket = await _db.Buckets.FirstOrDefaultAsync(b => b.Id == bucketId);
+        var bucket = await _db.QueryFirstOrDefaultAsync<BucketEntity>(
+            "SELECT * FROM Buckets WHERE Id = @bucketId", new { bucketId });
         if (bucket == null)
             return null!;
 
@@ -49,8 +50,9 @@ public sealed class UploadTokenService : IUploadTokenService
             CreatedAt = DateTime.UtcNow
         };
 
-        _db.UploadTokens.Add(entity);
-        await _db.SaveChangesAsync();
+        await _db.ExecuteAsync(
+            "INSERT INTO UploadTokens (Token, BucketId, ExpiresAt, MaxUploads, UploadsUsed, CreatedAt) VALUES (@Token, @BucketId, @ExpiresAt, @MaxUploads, @UploadsUsed, @CreatedAt)",
+            entity);
 
         _cache.InvalidateStats();
         _logger.LogInformation("Created upload token for bucket {BucketId} (expires {ExpiresAt}, max uploads {MaxUploads})",
@@ -72,7 +74,8 @@ public sealed class UploadTokenService : IUploadTokenService
         if (cached != null)
             return cached.Value;
 
-        var entity = await _db.UploadTokens.FirstOrDefaultAsync(t => t.Token == token);
+        var entity = await _db.QueryFirstOrDefaultAsync<UploadTokenEntity>(
+            "SELECT * FROM UploadTokens WHERE Token = @token", new { token });
         if (entity == null)
         {
             _logger.LogDebug("Upload token not found");
@@ -102,9 +105,9 @@ public sealed class UploadTokenService : IUploadTokenService
     public async Task IncrementUsageAsync(string token, int count)
     {
         // Atomically increment uploads_used
-        await _db.UploadTokens
-            .Where(t => t.Token == token)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.UploadsUsed, t => t.UploadsUsed + count));
+        await _db.ExecuteAsync(
+            "UPDATE UploadTokens SET UploadsUsed = UploadsUsed + @count WHERE Token = @token",
+            new { count, token });
 
         _cache.InvalidateUploadToken(token);
     }
