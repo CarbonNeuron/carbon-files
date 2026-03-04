@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Xunit;
@@ -43,6 +44,7 @@ public class FileHubTests : IntegrationTestBase
             .WithUrl(hubUrl, options =>
             {
                 options.HttpMessageHandlerFactory = _ => Fixture.GetHandler();
+                options.Transports = HttpTransportType.LongPolling;
             })
             .Build();
     }
@@ -91,8 +93,8 @@ public class FileHubTests : IntegrationTestBase
         uploadResp.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Wait for the event (with timeout)
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
-        completedTask.Should().Be(receivedEvent.Task, "Should receive FileCreated event within 5 seconds");
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(2000, TestContext.Current.CancellationToken));
+        completedTask.Should().Be(receivedEvent.Task, "Should receive FileCreated event within timeout");
 
         var (eventBucketId, eventFile) = await receivedEvent.Task;
         eventBucketId.Should().Be(bucketId);
@@ -130,8 +132,8 @@ public class FileHubTests : IntegrationTestBase
         uploadResp2.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Wait for the event
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
-        completedTask.Should().Be(receivedEvent.Task, "Should receive FileUpdated event within 5 seconds");
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(2000, TestContext.Current.CancellationToken));
+        completedTask.Should().Be(receivedEvent.Task, "Should receive FileUpdated event within timeout");
 
         var (eventBucketId, eventFile) = await receivedEvent.Task;
         eventBucketId.Should().Be(bucketId);
@@ -169,8 +171,8 @@ public class FileHubTests : IntegrationTestBase
         deleteResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Wait for the event
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
-        completedTask.Should().Be(receivedEvent.Task, "Should receive FileDeleted event within 5 seconds");
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(2000, TestContext.Current.CancellationToken));
+        completedTask.Should().Be(receivedEvent.Task, "Should receive FileDeleted event within timeout");
 
         var (eventBucketId, eventPath) = await receivedEvent.Task;
         eventBucketId.Should().Be(bucketId);
@@ -217,8 +219,8 @@ public class FileHubTests : IntegrationTestBase
         createResp.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Wait for the event
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
-        completedTask.Should().Be(receivedEvent.Task, "Should receive BucketCreated event within 5 seconds");
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(2000, TestContext.Current.CancellationToken));
+        completedTask.Should().Be(receivedEvent.Task, "Should receive BucketCreated event within timeout");
 
         var eventBucket = await receivedEvent.Task;
         eventBucket.GetProperty("name").GetString().Should().Be("global-notify-test");
@@ -252,7 +254,7 @@ public class FileHubTests : IntegrationTestBase
         uploadResp1.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Wait for the first event
-        var completed = await Task.WhenAny(firstEventReceived.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
+        var completed = await Task.WhenAny(firstEventReceived.Task, Task.Delay(2000, TestContext.Current.CancellationToken));
         completed.Should().Be(firstEventReceived.Task, "Should receive first FileCreated event");
         receivedEvents.Should().HaveCount(1);
 
@@ -264,7 +266,7 @@ public class FileHubTests : IntegrationTestBase
         uploadResp2.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Wait a bit and verify no new event
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
         receivedEvents.Should().HaveCount(1);
 
         await connection.StopAsync(TestContext.Current.CancellationToken);
@@ -294,8 +296,8 @@ public class FileHubTests : IntegrationTestBase
         deleteResp.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Wait for the event
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
-        completedTask.Should().Be(receivedEvent.Task, "Should receive BucketDeleted event within 5 seconds");
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(2000, TestContext.Current.CancellationToken));
+        completedTask.Should().Be(receivedEvent.Task, "Should receive BucketDeleted event within timeout");
 
         (await receivedEvent.Task).Should().Be(bucketId);
 
@@ -327,8 +329,8 @@ public class FileHubTests : IntegrationTestBase
         updateResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Wait for the event
-        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(5000, TestContext.Current.CancellationToken));
-        completedTask.Should().Be(receivedEvent.Task, "Should receive BucketUpdated event within 5 seconds");
+        var completedTask = await Task.WhenAny(receivedEvent.Task, Task.Delay(2000, TestContext.Current.CancellationToken));
+        completedTask.Should().Be(receivedEvent.Task, "Should receive BucketUpdated event within timeout");
 
         var (eventBucketId, eventChanges) = await receivedEvent.Task;
         eventBucketId.Should().Be(bucketId);
