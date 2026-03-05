@@ -66,9 +66,10 @@ public sealed class DatabaseHealthService : BackgroundService
 
         try
         {
-            using var cmd = _connection.CreateCommand();
+            var cmd = _connection.CreateCommand();
             cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
             cmd.ExecuteNonQuery();
+            cmd.Dispose();
             _logger.LogInformation("WAL checkpoint completed on shutdown");
         }
         catch (Exception ex)
@@ -77,7 +78,14 @@ public sealed class DatabaseHealthService : BackgroundService
         }
         finally
         {
-            await _connection.DisposeAsync();
+            _connection.Close();
+            _connection.Dispose();
         }
+    }
+
+    public override void Dispose()
+    {
+        _connection.Dispose();
+        base.Dispose();
     }
 }
