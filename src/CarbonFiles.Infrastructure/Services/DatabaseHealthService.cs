@@ -46,18 +46,7 @@ public sealed class DatabaseHealthService : BackgroundService
 
     internal void RunHealthCheck()
     {
-        var ok = DatabaseInitializer.RunIntegrityCheck(_connection, _logger);
-        if (!ok)
-        {
-            // REINDEX already ran inside RunIntegrityCheck — re-check to see if it helped
-            using var recheckCmd = _connection.CreateCommand();
-            recheckCmd.CommandText = "PRAGMA quick_check;";
-            var result = recheckCmd.ExecuteScalar()?.ToString();
-            if (result == "ok")
-                _logger.LogInformation("Database integrity restored after REINDEX");
-            else
-                _logger.LogError("Database integrity still failing after REINDEX: {Result}", result);
-        }
+        DatabaseInitializer.RunIntegrityCheck(_connection, _logger);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

@@ -128,7 +128,19 @@ public static class DatabaseInitializer
             reindexCmd.CommandText = "REINDEX;";
             reindexCmd.ExecuteNonQuery();
             logger?.LogInformation("REINDEX completed successfully");
-            return true;
+
+            // Re-verify integrity after REINDEX
+            using var recheckCmd = sqlite.CreateCommand();
+            recheckCmd.CommandText = "PRAGMA quick_check;";
+            var recheckResult = recheckCmd.ExecuteScalar()?.ToString();
+            if (recheckResult == "ok")
+            {
+                logger?.LogInformation("Database integrity restored after REINDEX");
+                return true;
+            }
+
+            logger?.LogError("Database integrity still failing after REINDEX: {Result}", recheckResult);
+            return false;
         }
         catch (Exception ex)
         {
