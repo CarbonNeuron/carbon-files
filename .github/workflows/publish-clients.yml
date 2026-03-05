@@ -127,33 +127,16 @@ jobs:
         with:
           python-version: '3.12'
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: openapi-spec
-          path: clients/python
-
-      - name: Install tools
-        run: pip install openapi-python-client ruff
-
-      - name: Generate client
-        run: |
-          openapi-python-client generate \
-            --path openapi.json \
-            --config config.yml \
-            --meta poetry \
-            --output-path ./generated \
-            --overwrite
-
       - name: Build
         run: |
-          cd generated
+          pip install build
           sed -i "s/^version = .*/version = \"${{ needs.export-spec.outputs.version }}\"/" pyproject.toml
-          pip install build && python -m build
+          python -m build
 
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: clients/python/generated/dist/
+          packages-dir: clients/python/dist/
 
   publish-powershell:
     needs: export-spec

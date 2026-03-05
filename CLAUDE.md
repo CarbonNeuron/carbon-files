@@ -92,7 +92,7 @@ Four client SDKs under `clients/`:
 |---|---|---|---|
 | TypeScript | `@carbonfiles/client` (npm) | Hey API (`@hey-api/openapi-ts`) | `clients/typescript/` |
 | C# | `CarbonFiles.Client` (NuGet) | Hand-crafted | `clients/csharp/` |
-| Python | `carbonfiles-client` (PyPI) | openapi-python-client | `clients/python/` |
+| Python | `carbonfiles` (PyPI) | Hand-crafted | `clients/python/` |
 | PowerShell | `CarbonFiles` (PSGallery) | Hand-crafted | `clients/powershell/` |
 
 ### Regenerating Clients Locally
@@ -103,8 +103,8 @@ Four client SDKs under `clients/`:
 cp openapi.json clients/typescript/ && cd clients/typescript && npm run generate && npm run build
 # C# (hand-crafted, no generation needed — just build)
 dotnet build clients/csharp/ -c Release
-# Python
-cp openapi.json clients/python/ && clients/python/generate.sh
+# Python (hand-crafted, no generation needed — just build)
+cd clients/python && pip install -e ".[dev]" && python -m pytest
 ```
 
 Publishing is automated via `.github/workflows/publish-clients.yml` on GitHub Release.
