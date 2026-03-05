@@ -2,14 +2,80 @@
 
 CarbonFiles is a file-sharing platform with bucket-based organization, multi-auth (admin key, API key, JWT, upload token), content-addressable storage, real-time SignalR events, and client SDKs for TypeScript, C#, Python, and PowerShell. Two components: API backend (this repo) and Dashboard frontend (separate repo).
 
-## Quick Start
+---
 
+## For AI Agents
+
+**Prefer the `cf` CLI over raw `curl` — it's faster to write, less error-prone, and produces cleaner output.**
+
+- The CLI handles auth, JSON parsing, and error formatting automatically — no `jq` required
+- Commands map 1:1 to API operations; use `--json` flag when you need raw JSON for further processing
+- Only fall back to `curl` for features the CLI doesn't cover yet (SignalR subscriptions, Range writes, HEAD requests)
+- **Prerequisite:** .NET 10 runtime — check with `dotnet --version`
+
+---
+
+## Getting Started
+
+```bash
+# 1. Install
+dotnet tool install -g CarbonFiles.Cli
+
+# 2. Configure (single command sets both URL and token)
+cf config set --url https://files.carbun.xyz --token <your-api-key>
+
+# 3. First command
+cf bucket create "my-bucket" -e 1h
 ```
-Base URL: https://your-server.com (default port 8080)
-Auth:     Authorization: Bearer {your-key}
-First:    POST /api/buckets  {"name": "my-bucket"}
-Docs:     GET /scalar (interactive), GET /openapi/v1.json (spec)
-```
+
+After setup, all `cf` commands use the saved URL and token automatically. Use `cf config show` to verify.
+
+---
+
+## CLI Quick Reference
+
+| Task | CLI Command |
+|------|-------------|
+| Configure server | `cf config set --url <url> --token <token>` |
+| Show config | `cf config show` |
+| List profiles | `cf config profiles` |
+| Switch profile | `cf config use <name>` |
+| Create bucket | `cf bucket create <name> -e <duration>` |
+| List buckets | `cf bucket list` |
+| Get bucket info | `cf bucket info <id>` |
+| Update bucket | `cf bucket update <id>` |
+| Delete bucket | `cf bucket delete <id>` |
+| Download bucket as ZIP | `cf bucket download <id>` |
+| Watch bucket (real-time) | `cf bucket watch <id>` |
+| Upload file(s) | `cf file upload <bucket-id> ./file.jpg` |
+| Upload recursively | `cf file upload <bucket-id> ./dir/ -r` |
+| Upload from stdin | `echo "data" \| cf file upload <bucket-id> --stdin -n file.txt` |
+| List files | `cf file list <bucket-id>` |
+| Get file metadata | `cf file info <bucket-id> <path>` |
+| Download file | `cf file download <bucket-id> <path> -o ./out.jpg` |
+| Delete file | `cf file delete <bucket-id> <path>` |
+| Create upload token | `cf token create upload <bucket-id> -e 1h --max-uploads 10` |
+| Create dashboard token | `cf token create dashboard` |
+| Show token info | `cf token info` |
+| Resolve short URL | `cf short resolve <code>` |
+| Delete short URL | `cf short delete <code>` |
+| Create API key | `cf key create <name>` |
+| List API keys | `cf key list` |
+| View key usage | `cf key usage <prefix>` |
+| Revoke API key | `cf key delete <prefix>` |
+| Check health | `cf health` |
+| View stats | `cf stats` |
+
+**Global flags:**
+
+| Flag | Purpose |
+|------|---------|
+| `--json` | Output raw JSON (pipe to `jq` for further processing) |
+| `--profile <name>` | Use a specific config profile for this command |
+| `--help` | Show help information |
+| `--version` | Show version information |
+
+---
 
 ## Authentication
 
@@ -19,6 +85,8 @@ Docs:     GET /scalar (interactive), GET /openapi/v1.json (spec)
 | API key | `Authorization: Bearer cf4_{prefix}_{secret}` | Own buckets only |
 | Dashboard JWT | `Authorization: Bearer {jwt}` | Admin-level, stateless, max 24h |
 | Upload token | Query param `?token=cfu_{token}` | Single bucket, optional rate limit |
+
+---
 
 ## URL Conventions
 
@@ -31,7 +99,132 @@ Docs:     GET /scalar (interactive), GET /openapi/v1.json (spec)
 
 Never share raw `/api/` URLs with humans -- they return JSON. Dashboard and API may be on different subdomains.
 
-## Endpoints
+---
+
+## Workflows
+
+### 1. Upload a file and get a share link
+
+```bash
+cf bucket create "my-bucket"
+cf file upload <bucket-id> ./photo.jpg
+# Share: https://dash.example.com/buckets/<bucket-id>/files/photo.jpg
+# Or use the short_url from upload output for direct download
+```
+
+<details>
+<summary>curl fallback</summary>
+
+```bash
+BUCKET=$(curl -s -H "Authorization: Bearer $KEY" -d '{"name":"my-bucket"}' https://api.example.com/api/buckets | jq -r .id)
+curl -H "Authorization: Bearer $KEY" -F "photo.jpg=@photo.jpg" https://api.example.com/api/buckets/$BUCKET/upload
+```
+</details>
+
+---
+
+### 2. Create upload token and share
+
+```bash
+cf bucket create "uploads"
+cf token create upload <bucket-id> -e 7d
+# Share: POST https://api.example.com/api/buckets/<bucket-id>/upload?token=<token>
+```
+
+<details>
+<summary>curl fallback</summary>
+
+```bash
+BUCKET=$(curl -s -H "Authorization: Bearer $KEY" -d '{"name":"uploads"}' https://api.example.com/api/buckets | jq -r .id)
+TOKEN=$(curl -s -H "Authorization: Bearer $KEY" -d '{}' https://api.example.com/api/buckets/$BUCKET/tokens | jq -r .token)
+```
+</details>
+
+---
+
+### 3. Download bucket as ZIP
+
+```bash
+cf bucket download <bucket-id>
+```
+
+<details>
+<summary>curl fallback</summary>
+
+```bash
+curl -OJ https://api.example.com/api/buckets/$BUCKET/zip
+```
+</details>
+
+---
+
+### 4. Real-time notifications
+
+```bash
+cf bucket watch <bucket-id>
+# Streams FileCreated / FileUpdated / FileDeleted events to stdout. Ctrl+C to stop.
+```
+
+<details>
+<summary>SignalR fallback (for programmatic use)</summary>
+
+Connect to `/hub/files` (JSON protocol only). Auth via `?access_token=` query param. Invoke `SubscribeToBucket(bucketId)`, listen for `FileCreated`/`FileUpdated`/`FileDeleted`.
+</details>
+
+---
+
+### 5. Verify file integrity
+
+```bash
+# The /verify endpoint is not yet in the CLI; use curl directly:
+curl -s https://api.example.com/api/buckets/$BUCKET/files/photo.jpg/verify
+# Check "valid": true
+
+# For the sha256 hash via CLI:
+cf file info <bucket-id> photo.jpg --json | jq .sha256
+```
+
+---
+
+### 6. Browse directory tree
+
+```bash
+cf file list <bucket-id>
+```
+
+<details>
+<summary>curl fallback (tree/ls modes)</summary>
+
+```bash
+# One level
+curl -s "https://api.example.com/api/buckets/$BUCKET/ls?path=docs/"
+# Tree mode
+curl -s "https://api.example.com/api/buckets/$BUCKET/files?delimiter=/&prefix=docs/"
+```
+</details>
+
+---
+
+### 7. Generate dashboard login URL
+
+```bash
+cf token create dashboard
+# Outputs token — login URL: https://dash.example.com/?token=<token>
+```
+
+<details>
+<summary>curl fallback</summary>
+
+```bash
+JWT=$(curl -s -H "Authorization: Bearer $ADMIN_KEY" -d '{}' https://api.example.com/api/tokens/dashboard | jq -r .token)
+```
+</details>
+
+---
+
+## Endpoint Reference
+
+> The CLI covers the most common operations. Use these endpoints directly for SDK development, scripting edge cases, or features not yet in the CLI (file integrity verification, Range writes, tree-mode listing).
 
 ### Health
 
@@ -195,52 +388,7 @@ Events:
 - `FileCreated(bucketId, BucketFile)`, `FileUpdated(bucketId, BucketFile)`, `FileDeleted(bucketId, path)`
 - `BucketCreated(Bucket)`, `BucketUpdated(bucketId, BucketChanges)`, `BucketDeleted(bucketId)`
 
-## Workflows
-
-### 1. Upload a file and get a share link
-```bash
-# Create bucket
-BUCKET=$(curl -s -H "Authorization: Bearer $KEY" -d '{"name":"my-bucket"}' https://api.example.com/api/buckets | jq -r .id)
-# Upload file
-curl -H "Authorization: Bearer $KEY" -F "photo.jpg=@photo.jpg" https://api.example.com/api/buckets/$BUCKET/upload
-# Share: https://dash.example.com/buckets/$BUCKET/files/photo.jpg (human)
-# Or use short_url from upload response for direct download
-```
-
-### 2. Create upload token and share
-```bash
-BUCKET=$(curl -s -H "Authorization: Bearer $KEY" -d '{"name":"uploads"}' https://api.example.com/api/buckets | jq -r .id)
-TOKEN=$(curl -s -H "Authorization: Bearer $KEY" -d '{}' https://api.example.com/api/buckets/$BUCKET/tokens | jq -r .token)
-# Share upload URL: POST https://api.example.com/api/buckets/$BUCKET/upload?token=$TOKEN
-```
-
-### 3. Download bucket as ZIP
-```bash
-curl -OJ https://api.example.com/api/buckets/$BUCKET/zip
-```
-
-### 4. Real-time notifications
-Connect to `/hub/files` via SignalR, invoke `SubscribeToBucket(bucketId)`, listen for `FileCreated`/`FileUpdated`/`FileDeleted`.
-
-### 5. Verify file integrity
-```bash
-curl -s https://api.example.com/api/buckets/$BUCKET/files/photo.jpg/verify
-# Check "valid": true
-```
-
-### 6. Browse directory tree
-```bash
-# One level
-curl -s "https://api.example.com/api/buckets/$BUCKET/ls?path=docs/"
-# Tree mode
-curl -s "https://api.example.com/api/buckets/$BUCKET/files?delimiter=/&prefix=docs/"
-```
-
-### 7. Generate dashboard login URL
-```bash
-JWT=$(curl -s -H "Authorization: Bearer $ADMIN_KEY" -d '{}' https://api.example.com/api/tokens/dashboard | jq -r .token)
-# Login URL: https://dash.example.com/?token=$JWT
-```
+---
 
 ## SDK Quick Reference
 
@@ -282,15 +430,16 @@ Get-CfFile -BucketId $bucket.Id
 Save-CfFileContent -BucketId $bucket.Id -FilePath "photo.jpg" -OutFile ./downloaded.jpg
 ```
 
-**CLI** (`cf` -- self-contained binary, [releases](https://github.com/carbungo/carbon-files-cli)):
+**CLI** (`dotnet tool install -g CarbonFiles.Cli` — requires .NET 10):
 ```bash
-cf config set-url https://files.example.com
-cf config set-key cf4_your_key
-cf bucket create --name my-bucket --expires 30d
+cf config set --url https://files.example.com --token cf4_your_key
+cf bucket create "my-bucket" -e 30d
 cf file upload $BUCKET_ID ./photo.jpg
 cf file list $BUCKET_ID
-cf file download $BUCKET_ID photo.jpg ./downloaded.jpg
+cf file download $BUCKET_ID photo.jpg -o ./downloaded.jpg
 ```
+
+---
 
 ## Error Handling
 
@@ -310,9 +459,13 @@ All errors return: `{ "error": "message", "hint?": "suggestion" }` (hint omitted
 | 413 | Payload Too Large |
 | 416 | Range Not Satisfiable |
 
+---
+
 ## Content-Addressable Storage
 
 Files stored by SHA-256 hash. Duplicate content stored once (dedup). Upload response includes `sha256` and `deduplicated: true/false`. Use `/verify` to check integrity. Short URLs point to content by hash.
+
+---
 
 ## File Serving
 
@@ -322,6 +475,8 @@ Files stored by SHA-256 hash. Duplicate content stored once (dedup). Upload resp
 - `Cache-Control: public, no-cache` -- always revalidate
 - `?download=true` -- forces download via Content-Disposition
 - HEAD supported on content and zip endpoints
+
+---
 
 ## Conventions
 
