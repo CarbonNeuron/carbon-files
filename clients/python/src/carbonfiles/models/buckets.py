@@ -29,7 +29,7 @@ class BucketDetail(Bucket):
 
 
 def _rebuild_models() -> None:
-    from carbonfiles.models.files import BucketFile  # noqa: F811
+    from carbonfiles.models.files import BucketFile  # noqa: F401
 
     BucketDetail.model_rebuild()
 

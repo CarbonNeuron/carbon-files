@@ -88,9 +88,7 @@ class TestFilesResource:
                 json={
                     "prefix": "docs/",
                     "delimiter": "/",
-                    "directories": [
-                        {"path": "docs/sub/", "file_count": 3, "total_size": 1024}
-                    ],
+                    "directories": [{"path": "docs/sub/", "file_count": 3, "total_size": 1024}],
                     "files": [BUCKET_FILE_JSON],
                     "total_files": 1,
                     "total_directories": 1,

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import urllib.parse
+from collections.abc import AsyncGenerator, Callable, Generator
 from io import BytesIO
 from pathlib import Path
-from collections.abc import AsyncGenerator, Generator
-from typing import BinaryIO, Callable
+from typing import BinaryIO
 
 from carbonfiles.models.common import PaginatedResponse
 from carbonfiles.models.files import (
@@ -150,10 +150,7 @@ class FileResource:
         self._transport = transport
         self._bucket_id = bucket_id
         self._path = path
-        self._base = (
-            f"/api/buckets/{urllib.parse.quote(bucket_id, safe='')}"
-            f"/files/{urllib.parse.quote(path, safe='')}"
-        )
+        self._base = f"/api/buckets/{urllib.parse.quote(bucket_id, safe='')}/files/{urllib.parse.quote(path, safe='')}"
 
     def metadata(self) -> BucketFile:
         return self._transport.get(self._base, BucketFile)
@@ -336,10 +333,7 @@ class AsyncFileResource:
         self._transport = transport
         self._bucket_id = bucket_id
         self._path = path
-        self._base = (
-            f"/api/buckets/{urllib.parse.quote(bucket_id, safe='')}"
-            f"/files/{urllib.parse.quote(path, safe='')}"
-        )
+        self._base = f"/api/buckets/{urllib.parse.quote(bucket_id, safe='')}/files/{urllib.parse.quote(path, safe='')}"
 
     async def metadata(self) -> BucketFile:
         return await self._transport.get(self._base, BucketFile)

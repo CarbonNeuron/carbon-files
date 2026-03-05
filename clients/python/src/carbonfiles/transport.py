@@ -127,9 +127,7 @@ class SyncTransport:
         """Build URL with query params, skipping ``None`` values."""
         if not query:
             return path
-        params = "&".join(
-            f"{k}={urllib.parse.quote(str(v), safe='')}" for k, v in query.items() if v is not None
-        )
+        params = "&".join(f"{k}={urllib.parse.quote(str(v), safe='')}" for k, v in query.items() if v is not None)
         return f"{path}?{params}" if params else path
 
     def _handle_error(self, response: httpx.Response) -> None:

@@ -30,9 +30,7 @@ class TestBucketsPagination:
                 }
                 for i in range(2)
             ]
-            return httpx.Response(
-                200, json={"items": items, "total": 2, "limit": 50, "offset": 0}
-            )
+            return httpx.Response(200, json={"items": items, "total": 2, "limit": 50, "offset": 0})
 
         transport = make_transport(handler)
         pages = list(BucketsResource(transport).list_all())
@@ -83,9 +81,7 @@ class TestBucketsPagination:
     def test_list_all_empty(self):
         # total=0 -> yields 1 empty page
         def handler(request):
-            return httpx.Response(
-                200, json={"items": [], "total": 0, "limit": 50, "offset": 0}
-            )
+            return httpx.Response(200, json={"items": [], "total": 0, "limit": 50, "offset": 0})
 
         transport = make_transport(handler)
         pages = list(BucketsResource(transport).list_all())
@@ -106,9 +102,7 @@ class TestFilesPagination:
                     "updated_at": "2026-01-01T00:00:00Z",
                 }
             ]
-            return httpx.Response(
-                200, json={"items": items, "total": 1, "limit": 50, "offset": 0}
-            )
+            return httpx.Response(200, json={"items": items, "total": 1, "limit": 50, "offset": 0})
 
         transport = make_transport(handler)
         pages = list(FilesResource(transport, "b1").list_all())

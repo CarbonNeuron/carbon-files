@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Callable, Any
+
+from collections.abc import Callable
 
 
 class CarbonFilesEvents:
@@ -53,11 +54,10 @@ class CarbonFilesEvents:
     def connect(self) -> None:
         """Connect to the SignalR hub. Requires signalr-async package."""
         try:
-            import signalr_async
+            import signalr_async  # noqa: F401
         except ImportError:
             raise ImportError(
-                "signalr-async is required for real-time events. "
-                "Install it with: pip install carbonfiles[events]"
+                "signalr-async is required for real-time events. Install it with: pip install carbonfiles[events]"
             )
         # TODO: Implement actual SignalR connection
         raise NotImplementedError("SignalR connection not yet implemented")

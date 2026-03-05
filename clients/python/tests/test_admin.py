@@ -4,7 +4,7 @@ import json
 
 import httpx
 
-from carbonfiles.models.keys import ApiKeyListItem, ApiKeyResponse, ApiKeyUsageResponse
+from carbonfiles.models.keys import ApiKeyResponse, ApiKeyUsageResponse
 from carbonfiles.models.stats import StatsResponse
 from carbonfiles.models.tokens import (
     DashboardTokenInfo,

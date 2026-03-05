@@ -5,7 +5,6 @@ import json
 import httpx
 
 from carbonfiles.models.buckets import Bucket, BucketDetail
-from carbonfiles.models.common import PaginatedResponse
 from carbonfiles.resources.buckets import BucketResource, BucketsResource
 from carbonfiles.transport import SyncTransport
 
