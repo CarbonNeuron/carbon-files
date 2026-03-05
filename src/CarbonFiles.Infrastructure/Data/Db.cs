@@ -63,11 +63,14 @@ internal static class Db
         string sql,
         Action<SqliteParameterCollection>? parameters,
         Func<SqliteDataReader, T> read,
+        IDbTransaction? transaction = null,
         CancellationToken ct = default) where T : class
     {
         var sqlite = (SqliteConnection)connection;
         using var cmd = sqlite.CreateCommand();
         cmd.CommandText = sql;
+        if (transaction != null)
+            cmd.Transaction = (SqliteTransaction)transaction;
         parameters?.Invoke(cmd.Parameters);
         using var reader = await cmd.ExecuteReaderAsync(ct);
         if (await reader.ReadAsync(ct))

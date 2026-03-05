@@ -404,7 +404,8 @@ public sealed class FileService : IFileService
             var existingNew = await Db.QueryFirstOrDefaultAsync(_db,
                 "SELECT * FROM ContentObjects WHERE Hash = @hash",
                 p => p.AddWithValue("@hash", newHash),
-                ContentObjectEntity.Read);
+                ContentObjectEntity.Read,
+                tx);
 
             if (existingNew != null)
             {
