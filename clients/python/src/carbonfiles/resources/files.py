@@ -3,6 +3,7 @@ from __future__ import annotations
 import urllib.parse
 from io import BytesIO
 from pathlib import Path
+from collections.abc import AsyncGenerator, Generator
 from typing import BinaryIO, Callable
 
 from carbonfiles.models.common import PaginatedResponse
@@ -46,6 +47,15 @@ class FilesResource:
             query["order"] = order
         url = SyncTransport.build_url(f"{self._base}/files", query or None)
         return self._transport.get(url, PaginatedResponse[BucketFile])
+
+    def list_all(self, *, limit: int = 50) -> Generator[PaginatedResponse[BucketFile], None, None]:
+        offset = 0
+        while True:
+            page = self.list(limit=limit, offset=offset)
+            yield page
+            if offset + limit >= page.total:
+                break
+            offset += limit
 
     def list_tree(
         self,
@@ -224,6 +234,15 @@ class AsyncFilesResource:
             query["order"] = order
         url = AsyncTransport.build_url(f"{self._base}/files", query or None)
         return await self._transport.get(url, PaginatedResponse[BucketFile])
+
+    async def list_all(self, *, limit: int = 50) -> AsyncGenerator[PaginatedResponse[BucketFile], None]:
+        offset = 0
+        while True:
+            page = await self.list(limit=limit, offset=offset)
+            yield page
+            if offset + limit >= page.total:
+                break
+            offset += limit
 
     async def list_tree(
         self,
