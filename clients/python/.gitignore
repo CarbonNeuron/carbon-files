@@ -5,5 +5,4 @@ build/
 *.egg-info/
 generated/
 carbonfiles_client/
-pyproject.toml
 openapi.json
