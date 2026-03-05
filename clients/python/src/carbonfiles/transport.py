@@ -21,6 +21,8 @@ class SyncTransport:
         *,
         http_client: httpx.Client | None = None,
     ):
+        self.base_url = base_url
+        self.api_key = api_key
         if http_client is not None:
             self._client = http_client
         else:
@@ -137,9 +139,9 @@ class SyncTransport:
             data = response.json()
             error = data.get("error", response.text)
             hint = data.get("hint")
-            raise CarbonFilesError(response.status_code, error, hint)
         except (ValueError, KeyError):
-            raise CarbonFilesError(response.status_code, response.text)
+            raise CarbonFilesError(response.status_code, response.text) from None
+        raise CarbonFilesError(response.status_code, error, hint)
 
 
 class AsyncTransport:
@@ -152,6 +154,8 @@ class AsyncTransport:
         *,
         http_client: httpx.AsyncClient | None = None,
     ):
+        self.base_url = base_url
+        self.api_key = api_key
         if http_client is not None:
             self._client = http_client
         else:
@@ -262,6 +266,6 @@ class AsyncTransport:
             data = response.json()
             error = data.get("error", response.text)
             hint = data.get("hint")
-            raise CarbonFilesError(response.status_code, error, hint)
         except (ValueError, KeyError):
-            raise CarbonFilesError(response.status_code, response.text)
+            raise CarbonFilesError(response.status_code, response.text) from None
+        raise CarbonFilesError(response.status_code, error, hint)

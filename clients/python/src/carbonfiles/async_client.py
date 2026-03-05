@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from carbonfiles.events import CarbonFilesEvents
 from carbonfiles.models.stats import HealthResponse
 from carbonfiles.resources.buckets import AsyncBucketsResource
 from carbonfiles.resources.dashboard import AsyncDashboardResource
@@ -40,6 +41,10 @@ class AsyncCarbonFiles:
     @property
     def dashboard(self) -> AsyncDashboardResource:
         return AsyncDashboardResource(self._transport)
+
+    @property
+    def events(self) -> CarbonFilesEvents:
+        return CarbonFilesEvents(self._transport.base_url, self._transport.api_key)
 
     async def health(self) -> HealthResponse:
         return await self._transport.get("/healthz", HealthResponse)

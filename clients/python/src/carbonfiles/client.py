@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from carbonfiles.events import CarbonFilesEvents
 from carbonfiles.models.stats import HealthResponse
 from carbonfiles.resources.buckets import BucketsResource
 from carbonfiles.resources.dashboard import DashboardResource
@@ -40,6 +41,10 @@ class CarbonFiles:
     @property
     def dashboard(self) -> DashboardResource:
         return DashboardResource(self._transport)
+
+    @property
+    def events(self) -> CarbonFilesEvents:
+        return CarbonFilesEvents(self._transport.base_url, self._transport.api_key)
 
     def health(self) -> HealthResponse:
         return self._transport.get("/healthz", HealthResponse)

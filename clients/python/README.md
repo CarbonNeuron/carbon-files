@@ -29,7 +29,7 @@ print(f"Created bucket: {bucket.id}")
 
 # Upload a file
 result = cf.buckets[bucket.id].files.upload("/path/to/photo.jpg")
-print(f"Uploaded: {result.file.name} ({result.file.size} bytes)")
+print(f"Uploaded: {result.uploaded[0].name} ({result.uploaded[0].size} bytes)")
 
 # List files
 page = cf.buckets[bucket.id].files.list(limit=20)
