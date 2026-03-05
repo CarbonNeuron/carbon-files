@@ -49,7 +49,7 @@ describe("FileOperations", () => {
     expect(result.delimiter).toBe("/");
     const req = fetch.mock.calls[0]![0] as Request;
     const url = new URL(req.url);
-    expect(url.pathname).toBe("/api/buckets/bucket-1/tree");
+    expect(url.pathname).toBe("/api/buckets/bucket-1/files");
     expect(url.searchParams.get("delimiter")).toBe("/");
     expect(url.searchParams.get("prefix")).toBe("docs/");
   });

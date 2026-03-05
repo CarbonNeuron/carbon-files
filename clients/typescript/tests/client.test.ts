@@ -13,8 +13,8 @@ describe("CarbonFilesClient", () => {
   });
 
   it("options constructor accepts custom fetch", () => {
-    const customFetch = vi.fn();
-    const client = new CarbonFilesClient({ baseUrl: "https://example.com", fetch: customFetch as any });
+    const customFetch = vi.fn() as unknown as typeof globalThis.fetch;
+    const client = new CarbonFilesClient({ baseUrl: "https://example.com", fetch: customFetch });
     expect(client).toBeDefined();
   });
 });

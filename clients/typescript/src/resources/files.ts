@@ -52,12 +52,12 @@ export class FileOperations {
     options?: RequestOptions,
   ): Promise<FileTreeResponse> {
     const query: Record<string, string | undefined> = {};
-    if (params?.delimiter) query["delimiter"] = params.delimiter;
+    query["delimiter"] = params?.delimiter ?? "/";
     if (params?.prefix) query["prefix"] = params.prefix;
     if (params?.limit !== undefined) query["limit"] = String(params.limit);
     if (params?.cursor) query["cursor"] = params.cursor;
     return this.transport.get<FileTreeResponse>(
-      `/api/buckets/${encodeURIComponent(this.bucketId)}/tree`,
+      `/api/buckets/${encodeURIComponent(this.bucketId)}/files`,
       query,
       options,
     );
@@ -159,7 +159,7 @@ export class FileResource {
     totalSize: number,
     options?: RequestOptions,
   ): Promise<BucketFile> {
-    const url = this.transport.buildUrl(this.basePath);
+    const url = this.transport.buildUrl(`${this.basePath}/content`);
     const request = new Request(url, {
       method: "PATCH",
       body,
@@ -177,7 +177,7 @@ export class FileResource {
     body: ReadableStream<Uint8Array> | Uint8Array | Blob,
     options?: RequestOptions,
   ): Promise<BucketFile> {
-    const url = this.transport.buildUrl(this.basePath);
+    const url = this.transport.buildUrl(`${this.basePath}/content`);
     const request = new Request(url, {
       method: "PATCH",
       body,
