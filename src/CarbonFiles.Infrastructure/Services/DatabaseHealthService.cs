@@ -1,0 +1,83 @@
+using CarbonFiles.Core.Configuration;
+using CarbonFiles.Infrastructure.Data;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace CarbonFiles.Infrastructure.Services;
+
+public sealed class DatabaseHealthService : BackgroundService
+{
+    private readonly SqliteConnection _connection;
+    private readonly ILogger<DatabaseHealthService> _logger;
+
+    public DatabaseHealthService(IOptions<CarbonFilesOptions> options, ILogger<DatabaseHealthService> logger)
+    {
+        _logger = logger;
+        var connectionString = $"Data Source={options.Value.DbPath}";
+        _connection = new SqliteConnection(connectionString);
+        _connection.Open();
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // Wait for app to fully start before first check
+        await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                RunHealthCheck();
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during database health check");
+            }
+
+            await Task.Delay(TimeSpan.FromMinutes(60), stoppingToken);
+        }
+    }
+
+    internal void RunHealthCheck()
+    {
+        var ok = DatabaseInitializer.RunIntegrityCheck(_connection, _logger);
+        if (!ok)
+        {
+            // REINDEX already ran inside RunIntegrityCheck — re-check to see if it helped
+            using var recheckCmd = _connection.CreateCommand();
+            recheckCmd.CommandText = "PRAGMA quick_check;";
+            var result = recheckCmd.ExecuteScalar()?.ToString();
+            if (result == "ok")
+                _logger.LogInformation("Database integrity restored after REINDEX");
+            else
+                _logger.LogError("Database integrity still failing after REINDEX: {Result}", result);
+        }
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken);
+
+        try
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+            cmd.ExecuteNonQuery();
+            _logger.LogInformation("WAL checkpoint completed on shutdown");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to checkpoint WAL on shutdown");
+        }
+        finally
+        {
+            await _connection.DisposeAsync();
+        }
+    }
+}

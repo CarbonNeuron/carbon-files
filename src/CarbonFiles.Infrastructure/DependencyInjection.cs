@@ -68,6 +68,7 @@ public static class DependencyInjection
         // Background cleanup
         services.AddScoped<CleanupRepository>();
         services.AddHostedService<CleanupService>();
+        services.AddHostedService<DatabaseHealthService>();
 
         return services;
     }
